@@ -93,13 +93,15 @@ Now you can restart the ssh service or reboot, and test that you have successful
 
 Clone the latest Wazuh-Docker repository to the working directory on the Ansible Control Node, and compress it so that it can be deployed remotely to the target VM from Step 1
 
+consult Wazuh's Docker Documentation to get the latest release: https://documentation.wazuh.com/current/deployment-options/docker/wazuh-container.html
+
 clone Wazuh-Docker:
 
 ```
-git clone https://github.com/wazuh/wazuh-docker
+git clone https://github.com/wazuh/wazuh-docker.git -b v4.7.0
 ```
 
-Navigate to the wazuh-docker repository and set the branch to stable:
+(Optional) if issues are encountered with latest release, navigate to the wazuh-docker repository and set the branch to stable:
 
 ```
 git checkout origin/stable
