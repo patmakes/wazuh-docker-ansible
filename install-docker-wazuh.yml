@@ -1,0 +1,67 @@
+---
+- name: Install Docker and Docker-Compose
+  hosts: siem
+  remote_user: waz
+  become: true
+  tasks:
+    # transfer and run install script on remote host
+    - name: Copy and Execute the script
+      script: /etc/ansible/wazuh-docker-ansible/install-docker.sh
+
+    # install docker-compose from apt-get
+    - name: Install docker-compose
+      apt:
+        update_cache: yes
+        force_apt_get: yes
+        name: docker-compose
+        state: present
+
+    # install unzip
+    - name: Install unzip
+      apt:
+        update_cache: yes
+        force_apt_get: yes
+        name: unzip
+        state: present
+
+    # configure host memory
+    - name: Increase vm map count
+      sysctl:
+        name: vm.max_map_count
+        value: 262144
+        state: present
+        reload: true
+
+    # enable docker on boot
+    - name: Enable docker service
+      systemd:
+        name: docker
+        enabled: true
+
+    # create application directory on target host
+    - name: Create application folder for wazuh
+      ansible.builtin.file:
+        path: /etc/wazuh
+        state: directory
+        mode: "0755"
+
+    # unzip local repo to target host
+    - name: Unzip wazuh-docker
+      ansible.builtin.unarchive:
+        src: /etc/ansible/wazuh-docker-ansible/wazuh-docker.zip
+        dest: /etc/wazuh
+
+    # Generate certs
+    - name: Run cert generation container
+      docker_compose:
+        project_src: /etc/wazuh/wazuh-docker/single-node
+        files: generate-indexer-certs.yml
+        remove_orphans: true
+        recreate: always
+
+    # Run wazuh docker container
+    - name: Run wazuh manager containers
+      docker_compose:
+        project_src: /etc/wazuh/wazuh-docker/single-node
+        remove_orphans: true
+        recreate: always
