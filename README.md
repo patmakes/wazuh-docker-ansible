@@ -87,38 +87,33 @@ PasswordAuthentication no
 Now you can restart the ssh service or reboot, and test that you have successfully disabled password authentication. 
 
 ***Once you have set up SSH keys for the service account, make sure they are accessible to the Hosts file, either by path or vault injection***
-## Step 4 - Clone or Copy latest Wazuh-Docker Repo to Ansible Control Node
+## Step 4 - Define Wazuh Version to be deployed
 
-*Note that these commands are to be run from this repo located on the Ansible Control Node in `/etc/ansible/wazuh-docker-ansible/`, if you want to run them elsewhere change the paths in the provided ansible playbook*
+*Note that this playbook is to be run from this repo located on the Ansible Control Node in `/etc/ansible/wazuh-docker-ansible/`, if you want to run them elsewhere change the paths in the provided ansible playbook*
 
-Clone the latest Wazuh-Docker repository to the working directory on the Ansible Control Node, and compress it so that it can be deployed remotely to the target VM from Step 1
+The playbook will clone the Wazuh-Docker repo to the target VM for installation. 
 
-consult Wazuh's Docker Documentation to get the latest release: https://documentation.wazuh.com/current/deployment-options/docker/wazuh-container.html
+Consult Wazuh's Docker Documentation to get the latest release: https://documentation.wazuh.com/current/deployment-options/docker/wazuh-container.html
 
-clone Wazuh-Docker:
+The latest wazuh-docker release is v4.7.0 at time of writing.
 
-```
-git clone https://github.com/wazuh/wazuh-docker.git -b v4.7.0
-```
-
-(Optional) if issues are encountered with latest release, navigate to the wazuh-docker repository and set the branch to stable:
+If necessary, update the recommended branch from Wazuh's documentation in the "version" argument in this section of the playbook:
 
 ```
-git checkout origin/stable
+# clone latest git repository from wazuh github
+    - name: clone remote wazuh-docker repository
+      ansible.builtin.git:
+        repo: https://github.com/wazuh/wazuh-docker.git
+        dest: /etc/wazuh/wazuh-docker
+        single_branch: yes
+        version: v4.7.0
 ```
-
-navigate back out and compress the wazuh docker repo for deployment with ansible playbook:
-
-```
-zip -r wazuh-docker.zip wazuh-docker/
-```
-
 ## Step 5 - If possible, Snapshot Target VM 
 
 If your environment supports snapshots, it is a good idea at this point to snapshot the VM to roll back to a known good state in the event the installation fails in Step 6.
 
 Consult your hypervisor or system documentation for how to snapshot.
-## Step 5 - Test Ansible Connection to Target VM and run Playbook
+## Step 6 - Test Ansible Connection to Target VM and run Playbook
 
 To test the connection to the target VM from the ansible control node run:
 
@@ -135,12 +130,17 @@ If the connection is successful, run the docker installation playbook with:
 To run the playbook to install docker, docker-compose, and copy the wazuh-docker repo to the remote machine for deployment run:
 
 ```
-ansible-playbook -vvv install-docker-wazuh.yml
+ansible-playbook -vvv git-build-install-docker-wazuh.yml
 ```
 
-***Note, if you experience 404 errors double check that you set the branch to stable before zip and deployment***
+***Note, if you are not building the images locally and experience 404 errors double check that you set the branch to stable before zip and deployment***
 
-## (Optional) Step 6 - Disable the service account created for Wazuh Deployment
+## Step 6 - Change default passwords
+
+Refer to the Wazuh documentation to harden the password of the admin, kibana, and api user:
+
+https://documentation.wazuh.com/4.4/deployment-options/docker/wazuh-container.html#change-pwd-existing-usr
+## Step 7 - Disable the service account created for Wazuh Deployment
 
 to disable the nopassword account created for ansible until needed later, run:
 
@@ -148,9 +148,5 @@ to disable the nopassword account created for ansible until needed later, run:
 sudo usermod <USER> -s /sbin/nologin
 ```
 
-## (Optional) Step 7 - Change Admin default password
 
-Refer to the Wazuh documentation to harden the password of the admin user:
-
-https://documentation.wazuh.com/4.4/deployment-options/docker/wazuh-container.html#change-pwd-existing-usr
 

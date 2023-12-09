@@ -16,14 +16,6 @@
         name: docker-compose
         state: present
 
-    # install unzip
-    - name: Install unzip
-      apt:
-        update_cache: yes
-        force_apt_get: yes
-        name: unzip
-        state: present
-
     # configure host memory
     - name: Increase vm map count
       sysctl:
@@ -41,15 +33,17 @@
     # create application directory on target host
     - name: Create application folder for wazuh
       ansible.builtin.file:
-        path: /etc/wazuh
+        path: /etc/wazuh/wazuh-docker
         state: directory
         mode: "0755"
 
-    # unzip local repo to target host
-    - name: Unzip wazuh-docker
-      ansible.builtin.unarchive:
-        src: /etc/ansible/wazuh-docker-ansible/wazuh-docker.zip
-        dest: /etc/wazuh
+    # clone latest git repository from wazuh github
+    - name: clone remote wazuh-docker repository
+      ansible.builtin.git:
+        repo: https://github.com/wazuh/wazuh-docker.git
+        dest: /etc/wazuh/wazuh-docker
+        single_branch: yes
+        version: v4.7.0
 
     # Generate certs
     - name: Run cert generation container
@@ -58,6 +52,12 @@
         files: generate-indexer-certs.yml
         remove_orphans: true
         recreate: always
+
+    # build images locally
+    - name: Execute the build script
+      ansible.builtin.command: sh build-docker-images/build-images.sh
+      args:
+        chdir: /etc/wazuh/wazuh-docker/
 
     # Run wazuh docker container
     - name: Run wazuh manager containers
