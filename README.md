@@ -152,3 +152,7 @@ sudo usermod <USER> -s /sbin/nologin
 
 When configuring agents as per the Wazuh documentation, make sure that the Tailnet IP of the Wazuh server is specified as the server address, this will ensure that the deployed Wazuh Agents communicate remotely with the server via the Tailscale VPN.
 
+## Step 10 (optional)
+
+For windows hosts that have been configured with auditing, use the rule in the rules/ directory to handle applications that are generating excessive amounts of rule SID 60107 alerts.
+
