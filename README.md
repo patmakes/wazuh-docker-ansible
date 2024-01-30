@@ -1,7 +1,7 @@
 
 # Deploy Wazuh Server over Tailscale with Ansible
 
-This doc guides through provisioning a VM for the Wazuh server, enrolling it in a Tailscale Mesh network, then using a remote ansible node to install Docker and deploy the latest Wazuh-Docker repository over the Tailscale VPN.
+This doc guides through provisioning a VM for the Wazuh server, enrolling it in a Tailscale Mesh network, then using a remote ansible node to install Docker and deploy the latest Wazuh-Docker repository over the Tailscale VPN. This documentation assumes that you have already deployed a Tailscale Mesh VPN and configured an Ansible instance to run the playbook.
 
 ## Step 1 - Provision VM for Wazuh Server
 
@@ -78,7 +78,7 @@ After adding the SSH to the VM, test SSH with the key instead of the password to
    UsePAM no
 ```
 
-**sshd_config.d/50-cloud-init.conf**  *this one is easy to miss*
+**sshd_config.d/50-cloud-init.conf** 
 
 ```
 PasswordAuthentication no
@@ -86,7 +86,7 @@ PasswordAuthentication no
 
 Now you can restart the ssh service or reboot, and test that you have successfully disabled password authentication. 
 
-***Once you have set up SSH keys for the service account, make sure they are accessible to the Hosts file, either by path or vault injection***
+***Once you have set up SSH keys for the service account, make sure they are accessible to the Hosts file on the Tailscale Control Node, either by path or .env injection***
 ## Step 4 - Define Wazuh Version to be deployed
 
 *Note that this playbook is to be run from this repo located on the Ansible Control Node in `/etc/ansible/wazuh-docker-ansible/`, if you want to run them elsewhere change the paths in the provided ansible playbook*
@@ -117,13 +117,13 @@ Consult your hypervisor or system documentation for how to snapshot.
 
 To test the connection to the target VM from the ansible control node run:
 
-*in this care the group name is "Siem"*
+*in this case the group name is "Siem"*
 
 ```
 ansible -m ping <group name from hosts file>
 ```
 
-If the connection is successful, run the docker installation playbook with:
+If the connection is successful, run the docker installation playbook.
 
 *Note that this playbook requires the `install-docker.sh` script at the root of the repo directory*
 
@@ -135,18 +135,20 @@ ansible-playbook -vvv git-build-install-docker-wazuh.yml
 
 ***Note, if you are not building the images locally and experience 404 errors double check that you set the branch to stable before zip and deployment***
 
-## Step 6 - Change default passwords
+## Step 7 - Change default passwords
 
 Refer to the Wazuh documentation to harden the password of the admin, kibana, and api user:
 
-https://documentation.wazuh.com/4.4/deployment-options/docker/wazuh-container.html#change-pwd-existing-usr
-## Step 7 - Disable the service account created for Wazuh Deployment
+https://documentation.wazuh.com/current/deployment-options/docker/wazuh-container.html#change-pwd-existing-usr
+## Step 8 - Disable the service account created for Wazuh Deployment on the Host VM
 
-to disable the nopassword account created for ansible until needed later, run:
+to disable the service account created for ansible until needed later, run this command on the Host VM:
 
 ```
 sudo usermod <USER> -s /sbin/nologin
 ```
 
+## Step 9 - Deploy SIEM Agents
 
+When configuring agents as per the Wazuh documentation, make sure that the Tailnet IP of the Wazuh server is specified as the server address, this will ensure that the deployed Wazuh Agents communicate remotely with the server via the Tailscale VPN.
 
