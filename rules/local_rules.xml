@@ -1,0 +1,20 @@
+<!-- Local rules -->
+
+<!-- Modify it at your will. -->
+<!-- Copyright (C) 2015, Wazuh Inc. -->
+
+<group name="windows,windows_security,">
+  <!-- This rule is userful to handle excessive amounts of event SID 60107 on Windows systems where auditing of success/failure is configured  -->
+  
+  <rule id="100008" level="4" frequency="2" timeframe="120">
+    <if_matched_sid>60107</if_matched_sid>
+    <field name="win.eventdata.processName" type="pcre2">^(.*)1Password\.exe(.*)$|^(.*)msedge\.exe(.*)$|^(.*)chrome\.exe(.*)$|^(.*)svchost\.exe(.*)$|^(.*)RuntimeBroker\.exe(.*)$|^(.*)explorer\.exe(.*)$|^(.*)lsass\.exe(.*)$</field>
+    <options>no_log</options>
+    <description>Exclusion for rule 60107 when triggered by 1Password more than twice in 30 seconds.</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AC.6,nist_800_53_AU.14,pci_dss_10.2.2,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+  
+</group>
