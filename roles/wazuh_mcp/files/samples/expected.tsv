@@ -1,0 +1,14 @@
+line	expected_rule
+1	100100
+2	100106 (level 0, no alert)
+3	100101
+4	100102
+5	100103
+6	100105
+7-10	100107
+11-12	100104 (once the frequency threshold is reached)
+13	100112
+14	100109 (level 0, no alert)
+15	100113 (100114 also matches; the higher level should win)
+16	100114
+17	no rule (decoded as wazuh-api-log, other user)

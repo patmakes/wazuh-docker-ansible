@@ -1,0 +1,22 @@
+---
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+# `ports: !override` in the compose override needs Compose >= 2.24.
+docker_compose_min_version: "2.24.0"
+
+# Boot-order fix for containers that publish on the Tailscale IP (see README):
+# ip_nonlocal_bind sysctls (the actual fix) + docker.service ordering after tailscaled.
+docker_after_tailscale: true
+
+docker_supported_distributions:
+  Ubuntu: ["22.04", "24.04"]
+  Debian: ["12", "13"]
+
+docker_apt_arch_map:
+  x86_64: amd64
+  aarch64: arm64

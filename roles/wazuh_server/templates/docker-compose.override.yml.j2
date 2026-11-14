@@ -1,0 +1,44 @@
+# {{ ansible_managed }}
+# Applied on top of {{ wazuh_compose_dir }}/docker-compose.yml (never edited).
+# - `ports` lists are appended by Compose, so every ports key uses !override (Compose >= 2.24).
+# - `volumes` merge by container path, so a mount with the same target replaces upstream's.
+# - "$" in secrets is doubled so Compose does not interpolate it.
+services:
+  wazuh.manager:
+    ports: !override
+      - "{{ wazuh_bind_lan_ip }}:1514:1514"
+      - "{{ wazuh_bind_lan_ip }}:1515:1515"
+{% if wazuh_enable_syslog | bool %}
+      - "{{ wazuh_bind_lan_ip }}:514:514/udp"
+{% endif %}
+      - "{{ wazuh_bind_ts_ip }}:1514:1514"
+      - "{{ wazuh_bind_ts_ip }}:1515:1515"
+    environment:
+      INDEXER_PASSWORD: {{ vault_indexer_admin_password | replace('$', '$$') | to_json }}
+      API_PASSWORD: {{ vault_wazuh_api_password | replace('$', '$$') | to_json }}
+    volumes:
+      - {{ wazuh_deploy_dir }}/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf
+      - {{ wazuh_deploy_dir }}/authd.pass:/wazuh-config-mount/etc/authd.pass
+      - {{ wazuh_deploy_dir }}/local_rules.xml:/wazuh-config-mount/etc/rules/local_rules.xml
+      - {{ wazuh_deploy_dir }}/host_rules.xml:/wazuh-config-mount/etc/rules/host_rules.xml
+{% if wazuh_mcp_enabled | bool %}
+      - {{ wazuh_deploy_dir }}/mcp_decoders.xml:/wazuh-config-mount/etc/decoders/mcp_decoders.xml
+      - {{ wazuh_deploy_dir }}/mcp_rules.xml:/wazuh-config-mount/etc/rules/mcp_rules.xml
+{% endif %}
+
+  wazuh.indexer:
+    ports: !override []
+    environment:
+      OPENSEARCH_JAVA_OPTS: "-Xms{{ wazuh_indexer_heap }} -Xmx{{ wazuh_indexer_heap }}"
+    volumes:
+      - {{ wazuh_deploy_dir }}/internal_users.yml:/usr/share/wazuh-indexer/config/opensearch-security/internal_users.yml
+
+  wazuh.dashboard:
+    ports: !override
+      - "127.0.0.1:5601:5601"
+    environment:
+      INDEXER_PASSWORD: {{ vault_indexer_admin_password | replace('$', '$$') | to_json }}
+      DASHBOARD_PASSWORD: {{ vault_dashboard_kibanaserver_password | replace('$', '$$') | to_json }}
+      API_PASSWORD: {{ vault_wazuh_api_password | replace('$', '$$') | to_json }}
+    volumes:
+      - {{ wazuh_deploy_dir }}/wazuh.yml:/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml

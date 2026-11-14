@@ -1,0 +1,3 @@
+---
+wazuh_manager_address: "{{ wazuh_bind_lan_ip }}"
+wazuh_agent_group: lan

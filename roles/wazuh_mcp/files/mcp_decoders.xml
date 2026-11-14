@@ -1,0 +1,68 @@
+<!--
+  PROVISIONAL decoders for the Wazuh MCP server (ghcr.io/gensecaihq/wazuh-mcp-server:5.0.0).
+
+  Derived from the upstream source at tag v5.0.0, not from a running container:
+    - monitoring.JsonLogFormatter (LOG_FORMAT=json): one JSON object per record, keys in the
+      order timestamp, level, logger, message[, correlation_id, ...], json.dumps default
+      separators (", " and ": ").
+    - uvicorn's access log, which keeps uvicorn's own plain-text format:
+        INFO:     <peer ip>:<port> - "<METHOD> <path> HTTP/1.1" <status> <reason>
+    - server.py audit lines on the "wazuh_mcp_server.audit" logger (write tools only):
+        AUDIT: tool=<name> client=<principal> session=<id> cluster=<id> args={...}
+        AUDIT_OUTCOME: tool=<name> outcome=success|failure principal=<principal>
+                       session=<id> cluster=<id> duration_ms=<n> args={...}
+
+  Events arrive from the host agent's journald collector in syslog format, with the Docker
+  journald log tag as the program name: "<date> <host> wazuh-mcp[<pid>]: <line>".
+
+  Confirm against real output with scripts/mcp-log-samples.sh after deploying.
+-->
+
+<decoder name="wazuh-mcp">
+  <program_name>^wazuh-mcp$</program_name>
+</decoder>
+
+<!-- JSON application log: level and logger name -->
+<decoder name="wazuh-mcp-fields">
+  <parent>wazuh-mcp</parent>
+  <regex type="pcre2">"level": "(\w+)", "logger": "([\w.]+)"</regex>
+  <order>mcp.level, mcp.logger</order>
+</decoder>
+
+<!-- Audit, before execution of a write tool -->
+<decoder name="wazuh-mcp-fields">
+  <parent>wazuh-mcp</parent>
+  <regex type="pcre2">"message": "(AUDIT): tool=(\S+) client=(\S+) session=(\S+) cluster=(\S+) args=</regex>
+  <order>mcp.audit, mcp.tool, mcp.principal, mcp.session, mcp.cluster</order>
+</decoder>
+
+<!-- Audit, after execution of a write tool -->
+<decoder name="wazuh-mcp-fields">
+  <parent>wazuh-mcp</parent>
+  <regex type="pcre2">"message": "(AUDIT_OUTCOME): tool=(\S+) outcome=(\w+) principal=(\S+) session=(\S+) cluster=(\S+) duration_ms=(\d+)</regex>
+  <order>mcp.audit, mcp.tool, mcp.outcome, mcp.principal, mcp.session, mcp.cluster, mcp.duration_ms</order>
+</decoder>
+
+<!-- uvicorn access log -->
+<decoder name="wazuh-mcp-fields">
+  <parent>wazuh-mcp</parent>
+  <regex type="pcre2">^\w+:\s+(\d+\.\d+\.\d+\.\d+):(\d+) - "(\w+) (\S+) HTTP/[\d.]+" (\d{3})</regex>
+  <order>srcip, srcport, mcp.http_method, url, mcp.http_status</order>
+</decoder>
+
+<!--
+  Wazuh manager API request log (/var/ossec/logs/api.log), read by the manager itself.
+  Format from wazuh/wazuh v4.14.8 api/api/alogging.py (custom_logging), plain log format:
+    2026/11/14 19:01:10 INFO: <user> <ip> "<METHOD> <path>" with parameters {...} and body {...} done in 0.052s: <status>
+  With run_as logins (the dashboard) the user is followed by " (<auth-context hash>)".
+  PROVISIONAL, like the decoders above.
+-->
+<decoder name="wazuh-api-log">
+  <prematch type="pcre2">\S+ (?:\(\S+\) )?\d+\.\d+\.\d+\.\d+ "\w+ /\S*" with parameters </prematch>
+</decoder>
+
+<decoder name="wazuh-api-log-fields">
+  <parent>wazuh-api-log</parent>
+  <regex type="pcre2">(\S+) (?:\(\S+\) )?(\d+\.\d+\.\d+\.\d+) "(\w+) (/\S*)" with parameters .* done in [\d.]+s: (\d{3})</regex>
+  <order>api.user, srcip, api.method, url, api.status</order>
+</decoder>

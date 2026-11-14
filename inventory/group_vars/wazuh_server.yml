@@ -1,0 +1,17 @@
+---
+# Tailscale (100.x) address of the server. Agent ports 1514/1515 bind to it.
+wazuh_bind_ts_ip: ""
+
+# Indexer JVM heap. 4g suits the 16 GB VM (keep it at or below ~half of what the indexer can have).
+wazuh_indexer_heap: "4g"
+
+# wazuh-alerts-* indices older than this are deleted by an ISM policy.
+wazuh_retention_days: 90
+
+# LAN syslog listener on 514/udp. When true, wazuh_syslog_allowed_ips must list the senders.
+wazuh_enable_syslog: false
+wazuh_syslog_allowed_ips: []
+
+# A Wazuh agent on the Docker host itself (FIM, SCA, auth logs, disk-usage alerts, MCP logs).
+wazuh_host_agent_enabled: true
+wazuh_host_agent_group: wazuh-host

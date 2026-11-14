@@ -1,0 +1,134 @@
+---
+- name: Set vm.max_map_count for the indexer
+  ansible.posix.sysctl:
+    name: vm.max_map_count
+    value: "262144"
+    sysctl_file: /etc/sysctl.d/60-wazuh-indexer.conf
+    sysctl_set: true
+    state: present
+    reload: true
+
+- name: Create /opt/wazuh
+  ansible.builtin.file:
+    path: "{{ wazuh_upstream_dir | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create the deploy directory (everything this repo owns)
+  ansible.builtin.file:
+    path: "{{ wazuh_deploy_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# Never edited locally: force=true discards any drift so re-runs are clean.
+- name: Clone wazuh-docker at v{{ wazuh_version }}
+  ansible.builtin.git:
+    repo: "{{ wazuh_docker_repo }}"
+    dest: "{{ wazuh_upstream_dir }}"
+    version: "v{{ wazuh_version }}"
+    force: true
+
+- name: Check for existing certificates
+  ansible.builtin.stat:
+    path: "{{ wazuh_certs_dir }}/root-ca.pem"
+  register: wazuh_root_ca
+
+- name: Generate indexer certificates (first run only)
+  when: not wazuh_root_ca.stat.exists
+  block:
+    - name: Run the certificate generator to completion
+      community.docker.docker_compose_v2_run:
+        project_src: "{{ wazuh_compose_dir }}"
+        files:
+          - generate-indexer-certs.yml
+        service: generator
+        detach: false
+        cleanup: true
+
+    - name: Remove the certificate generator
+      community.docker.docker_compose_v2:
+        project_src: "{{ wazuh_compose_dir }}"
+        files:
+          - generate-indexer-certs.yml
+        state: absent
+
+# The indexer and dashboard containers run as UID/GID 1000 and read these two files
+# directly from the bind mount, so they are 0600 owned by 1000, not root.
+- name: Render indexer internal users
+  ansible.builtin.template:
+    src: internal_users.yml.j2
+    dest: "{{ wazuh_deploy_dir }}/internal_users.yml"
+    owner: "1000"
+    group: "1000"
+    mode: "0600"
+  no_log: true
+  notify: Restart wazuh indexer
+
+- name: Render dashboard API connection
+  ansible.builtin.template:
+    src: wazuh.yml.j2
+    dest: "{{ wazuh_deploy_dir }}/wazuh.yml"
+    owner: "1000"
+    group: "1000"
+    mode: "0600"
+  no_log: true
+  notify: Restart wazuh dashboard
+
+- name: Render manager ossec.conf
+  ansible.builtin.template:
+    src: wazuh_manager.conf.j2
+    dest: "{{ wazuh_deploy_dir }}/wazuh_manager.conf"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart wazuh manager
+
+- name: Write the agent enrollment password
+  ansible.builtin.copy:
+    content: "{{ vault_agent_enrollment_password }}\n"
+    dest: "{{ wazuh_deploy_dir }}/authd.pass"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart wazuh manager
+
+# Rule files are 0644: the manager's init script copies them as root and new files keep
+# the source mode, so 0600 would leave them unreadable to the wazuh user. They hold no
+# secrets, and the directory itself is 0700.
+- name: Render local rules
+  ansible.builtin.template:
+    src: local_rules.xml.j2
+    dest: "{{ wazuh_deploy_dir }}/local_rules.xml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart wazuh manager
+
+- name: Copy host rules (disk usage)
+  ansible.builtin.copy:
+    src: host_rules.xml
+    dest: "{{ wazuh_deploy_dir }}/host_rules.xml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart wazuh manager
+
+- name: Copy MCP decoders and rules
+  ansible.builtin.include_role:
+    name: wazuh_mcp
+    tasks_from: rules.yml
+  when: wazuh_mcp_enabled | bool
+
+- name: Render the compose override
+  ansible.builtin.template:
+    src: docker-compose.override.yml.j2
+    dest: "{{ wazuh_deploy_dir }}/docker-compose.override.yml"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true

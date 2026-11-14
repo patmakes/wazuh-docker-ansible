@@ -1,0 +1,15 @@
+---
+- name: Wazuh agents on Linux hosts
+  hosts: agents_tailnet:agents_lan
+  become: true
+  vars_files:
+    - "{{ playbook_dir }}/../inventory/group_vars/vault.yml"
+  roles:
+    - role: wazuh_agent
+
+- name: Wazuh agents on Windows hosts
+  hosts: agents_windows
+  vars_files:
+    - "{{ playbook_dir }}/../inventory/group_vars/vault.yml"
+  roles:
+    - role: wazuh_agent

@@ -1,0 +1,5 @@
+---
+# HTTPS port tailscaled listens on (tailnet only; Funnel is never enabled here).
+tailscale_serve_https_port: 443
+# Local backend, e.g. "https+insecure://127.0.0.1:5601" or "http://127.0.0.1:3000".
+tailscale_serve_target: ""

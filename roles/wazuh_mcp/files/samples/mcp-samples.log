@@ -1,0 +1,17 @@
+Nov 14 19:00:01 wazuh01 wazuh-mcp[1423]: {"timestamp": "2026-11-14T19:00:01.104211+00:00", "level": "INFO", "logger": "wazuh_mcp_server.server", "message": "Wazuh MCP Server v5.0.0 starting up..."}
+Nov 14 19:00:16 wazuh01 wazuh-mcp[1423]: INFO:     127.0.0.1:40122 - "GET /health HTTP/1.1" 200 OK
+Nov 14 19:01:10 wazuh01 wazuh-mcp[1423]: INFO:     172.18.0.1:51514 - "POST /mcp HTTP/1.1" 200 OK
+Nov 14 19:02:00 wazuh01 wazuh-mcp[1423]: {"timestamp": "2026-11-14T19:02:00.551302+00:00", "level": "WARNING", "logger": "wazuh_mcp_server.audit", "message": "AUDIT: tool=wazuh_block_ip client=env-3f9c1a2b4d5e6f70 session=7c1b0c1e-4a57-4a43-9d0a-0f3c6f1f2a11 cluster=default args={\"ip_address\": \"203.0.113.7\", \"agent_id\": \"001\"}", "correlation_id": "b7e1c6f2"}
+Nov 14 19:02:00 wazuh01 wazuh-mcp[1423]: {"timestamp": "2026-11-14T19:02:00.803950+00:00", "level": "WARNING", "logger": "wazuh_mcp_server.audit", "message": "AUDIT_OUTCOME: tool=wazuh_block_ip outcome=failure principal=env-3f9c1a2b4d5e6f70 session=7c1b0c1e-4a57-4a43-9d0a-0f3c6f1f2a11 cluster=default duration_ms=252 args={\"ip_address\": \"203.0.113.7\", \"agent_id\": \"001\"}", "correlation_id": "b7e1c6f2"}
+Nov 14 19:03:00 wazuh01 wazuh-mcp[1423]: {"timestamp": "2026-11-14T19:03:00.412077+00:00", "level": "WARNING", "logger": "wazuh_mcp_server.audit", "message": "AUDIT_OUTCOME: tool=wazuh_block_ip outcome=success principal=env-3f9c1a2b4d5e6f70 session=7c1b0c1e-4a57-4a43-9d0a-0f3c6f1f2a11 cluster=default duration_ms=611 args={\"ip_address\": \"203.0.113.7\", \"agent_id\": \"001\"}", "correlation_id": "c0a4d9e1"}
+Nov 14 19:04:01 wazuh01 wazuh-mcp[1423]: INFO:     172.18.0.1:51601 - "POST /mcp HTTP/1.1" 401 Unauthorized
+Nov 14 19:04:02 wazuh01 wazuh-mcp[1423]: INFO:     172.18.0.1:51602 - "POST /mcp HTTP/1.1" 401 Unauthorized
+Nov 14 19:04:03 wazuh01 wazuh-mcp[1423]: INFO:     172.18.0.1:51603 - "POST /mcp HTTP/1.1" 401 Unauthorized
+Nov 14 19:04:04 wazuh01 wazuh-mcp[1423]: INFO:     172.18.0.1:51604 - "POST /mcp HTTP/1.1" 401 Unauthorized
+Nov 14 19:04:05 wazuh01 wazuh-mcp[1423]: INFO:     172.18.0.1:51605 - "POST /mcp HTTP/1.1" 401 Unauthorized
+Nov 14 19:04:06 wazuh01 wazuh-mcp[1423]: INFO:     172.18.0.1:51606 - "POST /mcp HTTP/1.1" 401 Unauthorized
+2026/11/14 19:01:10 INFO: mcp-readonly 172.18.0.5 "GET /agents" with parameters {"limit": "5"} and body {} done in 0.052s: 200
+2026/11/14 19:01:09 INFO: mcp-readonly 172.18.0.5 "POST /security/user/authenticate" with parameters {"raw": "true"} and body {} done in 0.210s: 200
+2026/11/14 19:02:00 INFO: mcp-readonly 172.18.0.5 "PUT /active-response" with parameters {"agents_list": "001"} and body {"command": "!firewall-drop", "alert": {"data": {"srcip": "203.0.113.7"}}} done in 0.031s: 403
+2026/11/14 19:02:30 INFO: mcp-readonly 172.18.0.5 "GET /manager/configuration" with parameters {} and body {} done in 0.012s: 403
+2026/11/14 19:05:00 INFO: wazuh-wui (2c1e7a0d) 172.18.0.4 "GET /agents" with parameters {"limit": "500"} and body {} done in 0.040s: 200

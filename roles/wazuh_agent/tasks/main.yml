@@ -1,0 +1,29 @@
+---
+- name: Check agent settings
+  ansible.builtin.assert:
+    that:
+      - wazuh_manager_address | length > 0
+      - wazuh_agent_group | length > 0
+      - vault_agent_enrollment_password is defined
+      - vault_agent_enrollment_password | length > 0
+    fail_msg: >-
+      wazuh_manager_address, wazuh_agent_group and vault_agent_enrollment_password must be set
+      (inventory/group_vars and the vault).
+    quiet: true
+
+- name: Fail on unsupported platforms
+  ansible.builtin.fail:
+    msg: "wazuh_agent supports Debian/Ubuntu, RHEL-family and Windows, not {{ ansible_os_family }}."
+  when: ansible_os_family not in ['Debian', 'RedHat', 'Windows']
+
+- name: Install on Debian/Ubuntu
+  ansible.builtin.include_tasks: debian.yml
+  when: ansible_os_family == 'Debian'
+
+- name: Install on RHEL-family
+  ansible.builtin.include_tasks: redhat.yml
+  when: ansible_os_family == 'RedHat'
+
+- name: Install on Windows
+  ansible.builtin.include_tasks: windows.yml
+  when: ansible_os_family == 'Windows'

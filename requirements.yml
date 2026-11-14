@@ -1,0 +1,9 @@
+---
+collections:
+  - name: community.docker
+    version: "5.4.0"
+  - name: ansible.posix
+    version: "2.2.2"
+  # Only needed for the agents_windows group (Phase 4)
+  - name: ansible.windows
+    version: "3.9.2"

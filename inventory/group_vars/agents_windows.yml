@@ -1,0 +1,17 @@
+---
+# Windows agents always join the "windows" group. They default to the server's LAN address;
+# for a Windows host that only reaches the server over Tailscale, set
+# wazuh_manager_address: "{{ wazuh_server_magicdns }}" in its host vars.
+wazuh_manager_address: "{{ wazuh_bind_lan_ip }}"
+wazuh_agent_group: windows
+
+# Connection: OpenSSH (default). The remote DefaultShell must match ansible_shell_type.
+ansible_connection: ssh
+ansible_shell_type: powershell
+
+# WinRM alternative (needs `pip install pywinrm` on the control node):
+# ansible_connection: winrm
+# ansible_port: 5986
+# ansible_winrm_transport: ntlm
+# ansible_winrm_server_cert_validation: ignore
+# ansible_password: "{{ vault_windows_password }}"

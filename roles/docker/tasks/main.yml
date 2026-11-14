@@ -1,0 +1,124 @@
+---
+- name: Fail on unsupported distributions
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution in docker_supported_distributions
+      - (ansible_distribution_version | string in docker_supported_distributions[ansible_distribution])
+        or (ansible_distribution_major_version | string in docker_supported_distributions[ansible_distribution])
+      - ansible_architecture in docker_apt_arch_map
+    fail_msg: >-
+      {{ ansible_distribution }} {{ ansible_distribution_version }} ({{ ansible_architecture }}) is not supported.
+      Supported: Ubuntu 22.04/24.04 and Debian 12/13 on x86_64 or aarch64.
+    quiet: true
+
+- name: Install prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - git
+      - python3-debian
+      - python3-requests
+      - python3-yaml
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Remove Compose v1 apt package
+  ansible.builtin.apt:
+    name: docker-compose
+    state: absent
+
+- name: Remove standalone docker-compose binary
+  ansible.builtin.file:
+    path: /usr/local/bin/docker-compose
+    state: absent
+
+- name: Create apt keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Add Docker GPG key
+  ansible.builtin.get_url:
+    url: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg"
+    dest: /etc/apt/keyrings/docker.asc
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add Docker apt repository
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: deb
+    uris: "https://download.docker.com/linux/{{ ansible_distribution | lower }}"
+    suites: "{{ ansible_distribution_release }}"
+    components: stable
+    architectures: "{{ docker_apt_arch_map[ansible_architecture] }}"
+    signed_by: /etc/apt/keyrings/docker.asc
+  register: docker_apt_repo
+
+- name: Install Docker Engine and plugins
+  ansible.builtin.apt:
+    name: "{{ docker_packages }}"
+    state: present
+    update_cache: "{{ docker_apt_repo is changed }}"
+
+- name: Boot-order fix for publishing on the Tailscale IP
+  when: docker_after_tailscale | bool
+  block:
+    - name: Allow binding to addresses that are not assigned yet
+      ansible.posix.sysctl:
+        name: "{{ item }}"
+        value: "1"
+        sysctl_file: /etc/sysctl.d/60-nonlocal-bind.conf
+        sysctl_set: true
+        state: present
+        reload: true
+      loop:
+        - net.ipv4.ip_nonlocal_bind
+        - net.ipv6.ip_nonlocal_bind
+
+    - name: Create docker.service drop-in directory
+      ansible.builtin.file:
+        path: /etc/systemd/system/docker.service.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Order docker.service after tailscaled
+      ansible.builtin.template:
+        src: 10-after-tailscale.conf.j2
+        dest: /etc/systemd/system/docker.service.d/10-after-tailscale.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload systemd
+
+- name: Apply systemd changes now
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start Docker
+  ansible.builtin.systemd_service:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Read Docker Compose version
+  ansible.builtin.command:
+    cmd: docker compose version --short
+  register: docker_compose_version
+  changed_when: false
+  check_mode: false
+
+- name: Assert Docker Compose is new enough for !override
+  ansible.builtin.assert:
+    that:
+      - docker_compose_version.stdout | trim | regex_replace('^v', '') is version(docker_compose_min_version, '>=')
+    fail_msg: >-
+      Docker Compose {{ docker_compose_version.stdout | trim }} is too old;
+      {{ docker_compose_min_version }} or newer is required for `ports: !override`.
+    quiet: true

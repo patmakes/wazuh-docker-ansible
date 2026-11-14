@@ -1,0 +1,25 @@
+---
+- name: Wazuh single-node stack in Docker
+  hosts: wazuh_server
+  become: true
+  vars_files:
+    - "{{ playbook_dir }}/../inventory/group_vars/vault.yml"
+  roles:
+    - role: docker
+    - role: wazuh_server
+    - role: wazuh_mcp
+      when: wazuh_mcp_enabled | bool
+  tasks:
+    - name: Install the host agent
+      ansible.builtin.include_role:
+        name: wazuh_agent
+      vars:
+        # Enroll against the manager's published LAN ports, as a separate agent from the
+        # manager's built-in agent 000 (which only sees inside the container).
+        wazuh_manager_address: "{{ wazuh_bind_lan_ip }}"
+        wazuh_agent_group: "{{ wazuh_host_agent_group }}"
+        wazuh_agent_name: "{{ inventory_hostname }}-host"
+        # The group's centralized agent.conf runs `df -P /`; agents ignore remote
+        # commands unless this is enabled locally.
+        wazuh_agent_remote_commands: true
+      when: wazuh_host_agent_enabled | bool

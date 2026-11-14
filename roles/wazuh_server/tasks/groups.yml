@@ -1,0 +1,54 @@
+---
+- name: List agent groups on the manager
+  community.docker.docker_container_exec:
+    container: "{{ wazuh_manager_container }}"
+    argv:
+      - /var/ossec/bin/agent_groups
+      - -l
+  register: wazuh_agent_groups_current
+  changed_when: false
+  check_mode: false
+
+- name: Create missing agent groups
+  community.docker.docker_container_exec:
+    container: "{{ wazuh_manager_container }}"
+    argv:
+      - /var/ossec/bin/agent_groups
+      - -a
+      - -g
+      - "{{ item }}"
+      - -q
+  loop: "{{ wazuh_agent_groups | unique }}"
+  when: wazuh_agent_groups_current.stdout is not search('(?m)^\s*' ~ (item | regex_escape) ~ '\s+\(')
+  changed_when: true
+
+# Written into the wazuh_etc volume (not bind-mounted): remoted needs to own the group
+# directory to build merged.mg, and agents pick the file up on their next keep-alive.
+- name: Centralized config for the host agent group
+  when: wazuh_host_agent_enabled | bool
+  block:
+    - name: Read the group's current agent.conf
+      community.docker.docker_container_exec:
+        container: "{{ wazuh_manager_container }}"
+        argv:
+          - sh
+          - -c
+          - "cat /var/ossec/etc/shared/{{ wazuh_host_agent_group }}/agent.conf 2>/dev/null || true"
+      register: wazuh_host_agent_conf_current
+      changed_when: false
+      check_mode: false
+
+    - name: Write the group's agent.conf
+      community.docker.docker_container_exec:
+        container: "{{ wazuh_manager_container }}"
+        argv:
+          - sh
+          - -c
+          - >-
+            f=/var/ossec/etc/shared/{{ wazuh_host_agent_group }}/agent.conf;
+            cat > "$f" && chown wazuh:wazuh "$f" && chmod 660 "$f"
+        stdin: "{{ lookup('ansible.builtin.template', 'agent.conf.wazuh-host.j2') }}"
+      when: >-
+        (wazuh_host_agent_conf_current.stdout | trim)
+        != (lookup('ansible.builtin.template', 'agent.conf.wazuh-host.j2') | trim)
+      changed_when: true

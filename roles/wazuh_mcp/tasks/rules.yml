@@ -1,0 +1,20 @@
+---
+# Included from roles/wazuh_server (before `compose up`) so the files exist when the
+# manager's bind mounts are created. Same mount + restart-handler pattern as local_rules.xml.
+- name: Copy MCP decoders
+  ansible.builtin.copy:
+    src: mcp_decoders.xml
+    dest: "{{ wazuh_deploy_dir }}/mcp_decoders.xml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart wazuh manager
+
+- name: Copy MCP rules
+  ansible.builtin.copy:
+    src: mcp_rules.xml
+    dest: "{{ wazuh_deploy_dir }}/mcp_rules.xml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart wazuh manager

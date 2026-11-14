@@ -1,0 +1,19 @@
+---
+# Set per inventory group (see inventory/group_vars/agents_*.yml).
+wazuh_manager_address: ""
+wazuh_agent_group: default
+wazuh_agent_name: "{{ inventory_hostname }}"
+
+# Package revision: the agent is pinned to <wazuh_version>-<revision>, same release as the manager.
+wazuh_agent_package_revision: "1"
+
+wazuh_agent_repo_gpg_key: https://packages.wazuh.com/key/GPG-KEY-WAZUH
+wazuh_agent_apt_repo: https://packages.wazuh.com/4.x/apt/
+wazuh_agent_yum_repo: https://packages.wazuh.com/4.x/yum/
+wazuh_agent_windows_msi_url: >-
+  https://packages.wazuh.com/4.x/windows/wazuh-agent-{{ wazuh_version }}-{{ wazuh_agent_package_revision }}.msi
+wazuh_agent_windows_dir: 'C:\Program Files (x86)\ossec-agent'
+
+# Let the manager's centralized agent.conf run commands on this agent
+# (logcollector.remote_commands=1). Only turned on for the Wazuh host's own agent.
+wazuh_agent_remote_commands: false

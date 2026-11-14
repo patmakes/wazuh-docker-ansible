@@ -1,0 +1,93 @@
+---
+- name: Bring the Wazuh stack up
+  community.docker.docker_compose_v2:
+    project_src: "{{ wazuh_compose_dir }}"
+    files: "{{ wazuh_compose_files }}"
+    state: present
+    pull: missing
+    recreate: auto
+    wait: true
+    wait_timeout: 600
+  register: wazuh_server_compose_up
+
+- name: Restart containers whose mounted config changed
+  ansible.builtin.meta: flush_handlers
+
+# 200 = our admin hash is live. 401 = the security index was initialised with other hashes
+# (for example a pre-existing volume), which securityadmin.sh then replaces.
+- name: Wait for the indexer and test the admin password
+  community.docker.docker_container_exec:
+    container: "{{ wazuh_indexer_container }}"
+    argv:
+      - sh
+      - -c
+      - >-
+        curl -sk -o /dev/null -w '%{http_code}' -u "admin:${INDEXER_ADMIN_PASSWORD}"
+        https://localhost:9200 || true
+    env:
+      INDEXER_ADMIN_PASSWORD: "{{ vault_indexer_admin_password }}"
+  register: wazuh_indexer_auth
+  until: wazuh_indexer_auth.stdout | default('') | trim in ['200', '401']
+  retries: 60
+  delay: 10
+  changed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Load the security configuration (stale hashes in the security index)
+  community.docker.docker_container_exec:
+    container: "{{ wazuh_indexer_container }}"
+    argv:
+      - bash
+      - -c
+      - >-
+        export JAVA_HOME=/usr/share/wazuh-indexer/jdk;
+        bash /usr/share/wazuh-indexer/plugins/opensearch-security/tools/securityadmin.sh
+        -cd /usr/share/wazuh-indexer/config/opensearch-security/ -nhnv
+        -cacert /usr/share/wazuh-indexer/config/certs/root-ca.pem
+        -cert /usr/share/wazuh-indexer/config/certs/admin.pem
+        -key /usr/share/wazuh-indexer/config/certs/admin-key.pem
+        -p 9200 -icl
+  when: wazuh_indexer_auth.stdout | trim == '401'
+  changed_when: true
+
+- name: Confirm the admin password now works
+  community.docker.docker_container_exec:
+    container: "{{ wazuh_indexer_container }}"
+    argv:
+      - sh
+      - -c
+      - >-
+        curl -sk -o /dev/null -w '%{http_code}' -u "admin:${INDEXER_ADMIN_PASSWORD}"
+        https://localhost:9200 || true
+    env:
+      INDEXER_ADMIN_PASSWORD: "{{ vault_indexer_admin_password }}"
+  register: wazuh_indexer_auth_after
+  until: wazuh_indexer_auth_after.stdout | default('') | trim == '200'
+  retries: 12
+  delay: 10
+  when: wazuh_indexer_auth.stdout | trim == '401'
+  changed_when: false
+  no_log: true
+
+- name: Wait for the manager API
+  community.docker.docker_container_exec:
+    container: "{{ wazuh_manager_container }}"
+    argv:
+      - sh
+      - -c
+      - "curl -sk -o /dev/null -w '%{http_code}' https://localhost:55000/ || true"
+  register: wazuh_manager_api
+  until: wazuh_manager_api.stdout | default('') | trim in ['200', '401']
+  retries: 60
+  delay: 10
+  changed_when: false
+  check_mode: false
+
+- name: Publish the dashboard on the tailnet (tailscale serve, HTTPS 443)
+  ansible.builtin.include_role:
+    name: tailscale_serve
+  vars:
+    tailscale_serve_https_port: 443
+    # https+insecure is fine: the backend hop is loopback-only, to the dashboard's self-signed cert.
+    tailscale_serve_target: "https+insecure://127.0.0.1:5601"

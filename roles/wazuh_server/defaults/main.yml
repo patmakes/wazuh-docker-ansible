@@ -1,0 +1,77 @@
+---
+wazuh_docker_repo: https://github.com/wazuh/wazuh-docker.git
+wazuh_upstream_dir: /opt/wazuh/wazuh-docker
+wazuh_deploy_dir: /opt/wazuh/deploy
+wazuh_compose_dir: "{{ wazuh_upstream_dir }}/single-node"
+wazuh_certs_dir: "{{ wazuh_compose_dir }}/config/wazuh_indexer_ssl_certs"
+
+# Compose derives the project name from the directory name ("single-node").
+wazuh_compose_project: single-node
+wazuh_manager_container: "{{ wazuh_compose_project }}-wazuh.manager-1"
+wazuh_indexer_container: "{{ wazuh_compose_project }}-wazuh.indexer-1"
+wazuh_dashboard_container: "{{ wazuh_compose_project }}-wazuh.dashboard-1"
+
+wazuh_compose_files:
+  - docker-compose.yml
+  - "{{ wazuh_deploy_dir }}/docker-compose.override.yml"
+
+wazuh_indexer_heap: "4g"
+wazuh_retention_days: 90
+wazuh_ism_policy_id: wazuh-alerts-retention
+
+wazuh_enable_syslog: false
+wazuh_syslog_allowed_ips: []
+
+# Upstream's internal_users.yml also ships demo users (kibanaro, logstash, readall,
+# snapshotrestore) whose passwords are public and who could log in to the dashboard.
+# They are dropped by default (Pat's decision, 2026-11-14; the plan originally kept the
+# file unchanged). Set false to keep upstream's file as is.
+wazuh_indexer_remove_demo_users: true
+
+# Manager API user the dashboard (and this role) authenticates as.
+wazuh_api_user: wazuh-wui
+
+# Agent groups created on the manager before agents enroll.
+wazuh_agent_groups:
+  - tailnet
+  - lan
+  - windows
+  - "{{ wazuh_host_agent_group }}"
+wazuh_host_agent_group: wazuh-host
+wazuh_host_agent_enabled: true
+wazuh_mcp_enabled: false
+
+# Rule 100008: processes whose 60107 (Windows audit failure) noise is suppressed.
+# Do not add lsass.exe, svchost.exe or explorer.exe: that hides credential-theft signals.
+wazuh_60107_noisy_processes:
+  - 1Password.exe
+  - msedge.exe
+  - chrome.exe
+  - RuntimeBroker.exe
+wazuh_60107_frequency: 2
+wazuh_60107_timeframe: 120
+
+# Disk-usage alert thresholds are fixed in files/host_rules.xml (80% -> 100110, 90% -> 100111).
+wazuh_host_df_interval: 300
+
+# Vault variables that must be set (and must not be an upstream default).
+wazuh_required_vault_vars:
+  - vault_indexer_admin_password
+  - vault_indexer_admin_hash
+  - vault_dashboard_kibanaserver_password
+  - vault_dashboard_kibanaserver_hash
+  - vault_wazuh_api_password
+  - vault_agent_enrollment_password
+wazuh_required_vault_vars_mcp:
+  - vault_mcp_api_password
+  - vault_mcp_indexer_password
+  - vault_mcp_auth_secret
+  - vault_mcp_api_key
+wazuh_forbidden_secret_values:
+  - SecretPassword
+  - "MyS3cr37P450r.*-"
+  - kibanaserver
+  - CHANGEME
+  # upstream demo bcrypt hashes for admin and kibanaserver
+  - "$2y$12$K/SpwjtB.wOHJ/Nc6GVRDuc1h0rM1DfvziFRNPtk27P.c4yDr9njO"
+  - "$2a$12$4AcgAt3xwOWadA5s5blL6ev39OXDNhmOesEoo33eZtrq2N0YrU3H."

@@ -1,0 +1,46 @@
+---
+# gensecaihq/Wazuh-MCP-Server. Upstream's supported Wazuh range is 4.8.0-4.14.7; this repo
+# deploys 4.14.8, so compatibility is confirmed only by the smoke test in VERIFY.md.
+wazuh_mcp_version: "5.0.0"
+wazuh_mcp_image: "ghcr.io/gensecaihq/wazuh-mcp-server:{{ wazuh_mcp_version }}"
+
+wazuh_mcp_https_port: 8443
+wazuh_mcp_compose_file: "{{ wazuh_deploy_dir }}/docker-compose.mcp.yml"
+
+# Least-privilege accounts created on the manager API and the indexer.
+wazuh_mcp_api_user: mcp-readonly
+wazuh_mcp_indexer_user: mcp-readonly
+wazuh_mcp_indexer_role: mcp-readonly
+wazuh_mcp_indexer_index_patterns:
+  - "wazuh-alerts-*"
+  - "wazuh-states-vulnerabilities-*"
+wazuh_mcp_indexer_allowed_actions:
+  - read
+  - search
+
+# Lifetime of JWTs minted at POST /auth/token (1-8760 hours). 24 breaks an unattended
+# client daily; see README "Token lifetime" for the two options. Not decided here.
+wazuh_mcp_token_lifetime_hours: 24
+
+# Server-side tool allow-list, by upstream TOOLSET name (WAZUH_TOOLSETS). Empty = all toolsets.
+# Valid: alerts, agents, vulnerabilities, analysis, web_search, compliance, system, response.
+wazuh_mcp_tools_allowlist: []
+# Individual tool names to hide on top of that (WAZUH_DISABLED_TOOLS).
+wazuh_mcp_disabled_tools: []
+
+# Exact-match Origin allow-list. Requests without an Origin header are always accepted.
+wazuh_mcp_allowed_origins:
+  - "https://{{ wazuh_server_magicdns }}:{{ wazuh_mcp_https_port }}"
+
+# Peers whose X-Forwarded-For uvicorn trusts for the access log (FORWARDED_ALLOW_IPS).
+# `tailscale serve` sets that header to the tailnet client, but reaches the container
+# through Docker's bridge gateway, whose address is not fixed; "*" trusts any peer. That is
+# safe here only because port 3000 is published on 127.0.0.1 alone. Without it every
+# request is logged from the gateway address and rule 100104 cannot tell clients apart.
+# Set "" to turn it off.
+wazuh_mcp_forwarded_allow_ips: "*"
+
+# Rules 100112-100114 match this user name literally: keep roles/wazuh_mcp/files/mcp_rules.xml
+# in step if you change wazuh_mcp_api_user.
+wazuh_mcp_log_level: INFO
+wazuh_mcp_memory_limit: 512M

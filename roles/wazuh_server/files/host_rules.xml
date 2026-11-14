@@ -1,0 +1,24 @@
+<!--
+  Rules for the agent on the Docker host (group wazuh-host).
+  The group's agent.conf runs `df -P /` every 5 minutes. The indexer stops accepting
+  writes at its 95% flood-stage watermark, so these fire first.
+  Rule 530 is the stock parent for "ossec: output:" command events.
+-->
+<group name="wazuh_host,disk_usage,">
+
+  <rule id="100110" level="7">
+    <if_sid>530</if_sid>
+    <match>^ossec: output: 'df -P /':</match>
+    <regex type="pcre2">\s(?:[89]\d|100)%\s+/\s*$</regex>
+    <description>Wazuh host: root filesystem is at least 80% full.</description>
+    <group>low_diskspace,</group>
+  </rule>
+
+  <rule id="100111" level="12">
+    <if_sid>100110</if_sid>
+    <regex type="pcre2">\s(?:9\d|100)%\s+/\s*$</regex>
+    <description>Wazuh host: root filesystem is at least 90% full (indexer goes read-only at 95%).</description>
+    <group>low_diskspace,</group>
+  </rule>
+
+</group>

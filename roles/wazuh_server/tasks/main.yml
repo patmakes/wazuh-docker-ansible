@@ -1,0 +1,15 @@
+---
+- name: Preflight checks
+  ansible.builtin.import_tasks: preflight.yml
+
+- name: Upstream clone, certificates and rendered config
+  ansible.builtin.import_tasks: config.yml
+
+- name: Bring the stack up
+  ansible.builtin.import_tasks: stack.yml
+
+- name: Index retention policy
+  ansible.builtin.import_tasks: ism.yml
+
+- name: Agent groups and centralized agent config
+  ansible.builtin.import_tasks: groups.yml

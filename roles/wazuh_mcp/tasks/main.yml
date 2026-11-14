@@ -1,0 +1,181 @@
+---
+# Runs after roles/wazuh_server, i.e. with the stack healthy. The MCP decoders/rules were
+# already copied by tasks/rules.yml (included from wazuh_server before `compose up`).
+- name: Check MCP secrets
+  ansible.builtin.assert:
+    that:
+      - "\"'\" not in vault_mcp_api_password"
+      - "\"'\" not in vault_mcp_indexer_password"
+      - vault_mcp_auth_secret | length >= 32
+      - vault_mcp_api_key is match('^wazuh_[A-Za-z0-9_-]{43}$')
+      - wazuh_mcp_token_lifetime_hours | int >= 1
+      - wazuh_mcp_token_lifetime_hours | int <= 8760
+    fail_msg: >-
+      MCP secrets: passwords must not contain a single quote, vault_mcp_auth_secret needs at least
+      32 characters, vault_mcp_api_key must be "wazuh_" + 43 characters (see vault.example.yml),
+      and wazuh_mcp_token_lifetime_hours must be 1-8760.
+    quiet: true
+  no_log: true
+
+# --- Manager API: read-only user ------------------------------------------------------
+- name: Ensure the read-only manager API user, role and policies
+  community.docker.docker_container_exec:
+    container: "{{ wazuh_manager_container }}"
+    argv:
+      - /var/ossec/framework/python/bin/python3
+      - "-"
+    stdin: "{{ lookup('ansible.builtin.file', 'ensure_api_user.py') }}"
+    env:
+      API_ADMIN_USER: "{{ wazuh_api_user }}"
+      API_ADMIN_PASSWORD: "{{ vault_wazuh_api_password }}"
+      MCP_USER: "{{ wazuh_mcp_api_user }}"
+      MCP_PASSWORD: "{{ vault_mcp_api_password }}"
+  register: wazuh_mcp_api_user_result
+  changed_when: (wazuh_mcp_api_user_result.stdout_lines | last | from_json).changed
+  no_log: true
+
+# --- Indexer: read-only role and user, through the security REST API ------------------
+# (not internal_users.yml, which would need a securityadmin run)
+- name: Read the indexer role
+  community.docker.docker_container_exec:
+    container: "{{ wazuh_indexer_container }}"
+    argv:
+      - sh
+      - -c
+      - >-
+        curl -sk -u "admin:${INDEXER_ADMIN_PASSWORD}"
+        "https://localhost:9200/_plugins/_security/api/roles/${MCP_ROLE}"
+    env:
+      INDEXER_ADMIN_PASSWORD: "{{ vault_indexer_admin_password }}"
+      MCP_ROLE: "{{ wazuh_mcp_indexer_role }}"
+  register: wazuh_mcp_indexer_role_current
+  changed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Compare the indexer role with the wanted permissions
+  ansible.builtin.set_fact:
+    wazuh_mcp_indexer_role_in_sync: >-
+      {{
+        (wazuh_mcp_indexer_role_perms | length == 1)
+        and ((wazuh_mcp_indexer_role_perms | first).index_patterns | default([]) | sort
+             == wazuh_mcp_indexer_index_patterns | sort)
+        and ((wazuh_mcp_indexer_role_perms | first).allowed_actions | default([]) | sort
+             == wazuh_mcp_indexer_allowed_actions | sort)
+        and (wazuh_mcp_indexer_role_cluster_perms | length == 0)
+      }}
+  vars:
+    wazuh_mcp_indexer_role_body: >-
+      {{ (wazuh_mcp_indexer_role_current.stdout | from_json).get(wazuh_mcp_indexer_role, {}) }}
+    wazuh_mcp_indexer_role_perms: "{{ wazuh_mcp_indexer_role_body.index_permissions | default([]) }}"
+    wazuh_mcp_indexer_role_cluster_perms: "{{ wazuh_mcp_indexer_role_body.cluster_permissions | default([]) }}"
+
+- name: Create or update the indexer role
+  community.docker.docker_container_exec:
+    container: "{{ wazuh_indexer_container }}"
+    argv:
+      - sh
+      - -c
+      - >-
+        curl -sk -o /dev/null -w '%{http_code}' -u "admin:${INDEXER_ADMIN_PASSWORD}"
+        -X PUT -H 'Content-Type: application/json' --data-binary @-
+        "https://localhost:9200/_plugins/_security/api/roles/${MCP_ROLE}"
+    stdin: >-
+      {{
+        {
+          'cluster_permissions': [],
+          'index_permissions': [{
+            'index_patterns': wazuh_mcp_indexer_index_patterns,
+            'allowed_actions': wazuh_mcp_indexer_allowed_actions
+          }]
+        } | to_json
+      }}
+    env:
+      INDEXER_ADMIN_PASSWORD: "{{ vault_indexer_admin_password }}"
+      MCP_ROLE: "{{ wazuh_mcp_indexer_role }}"
+  register: wazuh_mcp_indexer_role_put
+  when: not (wazuh_mcp_indexer_role_in_sync | bool)
+  failed_when: wazuh_mcp_indexer_role_put.stdout | trim not in ['200', '201']
+  changed_when: true
+  no_log: true
+
+# Logging in as the user proves both the password and the role mapping in one request.
+- name: Test the indexer user
+  community.docker.docker_container_exec:
+    container: "{{ wazuh_indexer_container }}"
+    argv:
+      - sh
+      - -c
+      - >-
+        curl -sk -u "${MCP_USER}:${MCP_PASSWORD}"
+        https://localhost:9200/_plugins/_security/authinfo || true
+    env:
+      MCP_USER: "{{ wazuh_mcp_indexer_user }}"
+      MCP_PASSWORD: "{{ vault_mcp_indexer_password }}"
+  register: wazuh_mcp_indexer_user_current
+  changed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Create or update the indexer user
+  community.docker.docker_container_exec:
+    container: "{{ wazuh_indexer_container }}"
+    argv:
+      - sh
+      - -c
+      - >-
+        curl -sk -o /dev/null -w '%{http_code}' -u "admin:${INDEXER_ADMIN_PASSWORD}"
+        -X PUT -H 'Content-Type: application/json' --data-binary @-
+        "https://localhost:9200/_plugins/_security/api/internalusers/${MCP_USER}"
+    stdin: >-
+      {{
+        {
+          'password': vault_mcp_indexer_password,
+          'opendistro_security_roles': [wazuh_mcp_indexer_role],
+          'description': 'Read-only account for the Wazuh MCP server (managed by Ansible)'
+        } | to_json
+      }}
+    env:
+      INDEXER_ADMIN_PASSWORD: "{{ vault_indexer_admin_password }}"
+      MCP_USER: "{{ wazuh_mcp_indexer_user }}"
+  register: wazuh_mcp_indexer_user_put
+  when: ('"' ~ wazuh_mcp_indexer_role ~ '"') not in (wazuh_mcp_indexer_user_current.stdout | replace(' ', ''))
+  failed_when: wazuh_mcp_indexer_user_put.stdout | trim not in ['200', '201']
+  changed_when: true
+  no_log: true
+
+# --- Container ------------------------------------------------------------------------
+- name: Render the MCP environment file
+  ansible.builtin.template:
+    src: mcp.env.j2
+    dest: "{{ wazuh_deploy_dir }}/mcp.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Render the MCP compose file
+  ansible.builtin.template:
+    src: docker-compose.mcp.yml.j2
+    dest: "{{ wazuh_mcp_compose_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Start the MCP server alongside the Wazuh stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ wazuh_compose_dir }}"
+    files: "{{ wazuh_compose_files + [wazuh_mcp_compose_file] }}"
+    state: present
+    pull: missing
+    recreate: auto
+    wait: true
+    wait_timeout: 300
+
+# Tailnet only: Funnel is never enabled. 443 already belongs to the dashboard.
+- name: Publish the MCP endpoint on the tailnet (tailscale serve, HTTPS {{ wazuh_mcp_https_port }})
+  ansible.builtin.include_role:
+    name: tailscale_serve
+  vars:
+    tailscale_serve_https_port: "{{ wazuh_mcp_https_port }}"
+    tailscale_serve_target: "http://127.0.0.1:3000"

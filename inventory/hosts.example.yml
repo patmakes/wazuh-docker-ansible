@@ -1,0 +1,30 @@
+---
+# Copy to inventory/hosts.yml (git-ignored) and fill in.
+all:
+  children:
+    wazuh_server:
+      hosts:
+        wazuh01:
+          ansible_host: wazuh01.example-tailnet.ts.net
+          ansible_user: deploy
+
+    # Linux hosts on the tailnet. Must carry tag:wazuh-agent (see tailscale/acl-snippet.hujson).
+    agents_tailnet:
+      hosts:
+        # vps01:
+        #   ansible_host: vps01.example-tailnet.ts.net
+        #   ansible_user: deploy
+
+    # Linux hosts that reach the server on its LAN address.
+    agents_lan:
+      hosts:
+        # nas01:
+        #   ansible_host: 192.168.1.20
+        #   ansible_user: deploy
+
+    # Windows hosts (OpenSSH by default; see inventory/group_vars/agents_windows.yml).
+    agents_windows:
+      hosts:
+        # desktop01:
+        #   ansible_host: 192.168.1.30
+        #   ansible_user: ansible

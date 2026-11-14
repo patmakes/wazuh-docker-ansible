@@ -1,0 +1,20 @@
+---
+# Shared by debian.yml and redhat.yml, after the package is installed.
+- name: Allow commands from the centralized agent.conf
+  ansible.builtin.lineinfile:
+    path: /var/ossec/etc/local_internal_options.conf
+    regexp: '^logcollector\.remote_commands='
+    line: logcollector.remote_commands=1
+    owner: root
+    group: wazuh
+    mode: "0640"
+    create: true
+  when: wazuh_agent_remote_commands | bool
+  notify: Restart wazuh agent
+
+- name: Enable and start the agent
+  ansible.builtin.systemd_service:
+    name: wazuh-agent
+    enabled: true
+    state: started
+    daemon_reload: "{{ wazuh_agent_install is changed }}"

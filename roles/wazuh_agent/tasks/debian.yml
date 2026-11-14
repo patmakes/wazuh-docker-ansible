@@ -1,0 +1,55 @@
+---
+- name: Install repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Add the Wazuh apt repository
+  ansible.builtin.deb822_repository:
+    name: wazuh
+    types: deb
+    uris: "{{ wazuh_agent_apt_repo }}"
+    suites: stable
+    components: main
+    signed_by: "{{ wazuh_agent_repo_gpg_key }}"
+  register: wazuh_agent_repo
+
+# A non-empty client.keys means the agent is already enrolled: the registration password is
+# then left out so a re-run (or a version bump) never re-registers it.
+- name: Check for an existing enrollment
+  ansible.builtin.stat:
+    path: /var/ossec/etc/client.keys
+  register: wazuh_agent_client_keys
+
+- name: Install the pinned wazuh-agent package
+  ansible.builtin.apt:
+    name: "wazuh-agent={{ wazuh_version }}-{{ wazuh_agent_package_revision }}"
+    state: present
+    update_cache: "{{ wazuh_agent_repo is changed }}"
+    allow_change_held_packages: true
+  environment: >-
+    {{
+      {
+        'WAZUH_MANAGER': wazuh_manager_address,
+        'WAZUH_AGENT_GROUP': wazuh_agent_group,
+        'WAZUH_AGENT_NAME': wazuh_agent_name
+      } | combine(
+        {} if (wazuh_agent_client_keys.stat.exists and wazuh_agent_client_keys.stat.size > 0)
+        else {'WAZUH_REGISTRATION_PASSWORD': vault_agent_enrollment_password}
+      )
+    }}
+  register: wazuh_agent_install
+  no_log: true
+
+# An OS upgrade must not move the agent ahead of the manager.
+- name: Hold the wazuh-agent package
+  ansible.builtin.dpkg_selections:
+    name: wazuh-agent
+    selection: hold
+
+- name: Configure and start the agent
+  ansible.builtin.include_tasks: linux_common.yml

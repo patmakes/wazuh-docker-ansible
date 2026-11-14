@@ -1,0 +1,54 @@
+// Wazuh additions for the tailnet policy file. MERGE these entries into the existing
+// "tagOwners", "grants" and "ssh" sections in the Tailscale admin console (Access controls);
+// do not replace the whole file. Review against your current rules first: a bad policy can
+// lock you out.
+//
+// Placeholders to replace before pasting:
+//   autogroup:admin        -> your own account or group, if you want it narrower than all tailnet admins
+//   tag:wazuh-mcp-client   -> keep the tag (and tag the ollama-server and Code North hosts with it),
+//                             or replace it with those hosts' tailnet IPs
+//   "deploy"               -> the Ansible deploy user on the Wazuh server
+{
+	"tagOwners": {
+		// The Wazuh server (enrolled with --advertise-tags=tag:wazuh)
+		"tag:wazuh": ["autogroup:admin"],
+		// Every tailnet host that runs a Wazuh agent
+		"tag:wazuh-agent": ["autogroup:admin"],
+		// Hosts allowed to reach the MCP endpoint (only needed with wazuh_mcp_enabled)
+		"tag:wazuh-mcp-client": ["autogroup:admin"],
+	},
+
+	"grants": [
+		// Agents -> manager: event channel (1514) and enrollment (1515)
+		{
+			"src": ["tag:wazuh-agent"],
+			"dst": ["tag:wazuh"],
+			"ip": ["tcp:1514", "tcp:1515"],
+		},
+		// Admin devices -> dashboard (tailscale serve on 443).
+		// tcp:22 is only needed for plain SSH; drop it if you use the Tailscale SSH block below.
+		{
+			"src": ["autogroup:admin"],
+			"dst": ["tag:wazuh"],
+			"ip": ["tcp:443", "tcp:22"],
+		},
+		// MCP clients -> MCP endpoint (tailscale serve on 8443). Nobody else: agents and
+		// other admin devices get no access to it. Omit when wazuh_mcp_enabled is false.
+		{
+			"src": ["tag:wazuh-mcp-client"],
+			"dst": ["tag:wazuh"],
+			"ip": ["tcp:8443"],
+		},
+	],
+
+	// Optional: Tailscale SSH into the Wazuh server as the deploy user
+	// (needs `tailscale set --ssh` on the server).
+	"ssh": [
+		{
+			"action": "check",
+			"src": ["autogroup:admin"],
+			"dst": ["tag:wazuh"],
+			"users": ["deploy"],
+		},
+	],
+}

@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+# Start Docker after tailscaled so the 100.x address usually exists when ports are published.
+# The ip_nonlocal_bind sysctls are what actually make the bind succeed; this is ordering only.
+[Unit]
+After=tailscaled.service
+Wants=tailscaled.service

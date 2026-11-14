@@ -1,0 +1,43 @@
+---
+# Fail fast, before anything is touched on the host.
+- name: Check that every vault variable is set
+  ansible.builtin.assert:
+    that:
+      - lookup('ansible.builtin.vars', item, default='') | string | length > 0
+    fail_msg: "{{ item }} is not set. Fill in inventory/group_vars/vault.yml (see vault.example.yml)."
+    quiet: true
+  loop: "{{ wazuh_required_vault_vars + (wazuh_required_vault_vars_mcp if wazuh_mcp_enabled | bool else []) }}"
+
+- name: Check that no vault variable is an upstream default or placeholder
+  ansible.builtin.assert:
+    that:
+      - lookup('ansible.builtin.vars', item, default='') | string not in wazuh_forbidden_secret_values
+    fail_msg: "{{ item }} still has an upstream default or placeholder value. Choose your own."
+    quiet: true
+  loop: "{{ wazuh_required_vault_vars + (wazuh_required_vault_vars_mcp if wazuh_mcp_enabled | bool else []) }}"
+
+- name: Check that the indexer hashes look like bcrypt hashes
+  ansible.builtin.assert:
+    that:
+      - vault_indexer_admin_hash is match('^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$')
+      - vault_dashboard_kibanaserver_hash is match('^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$')
+    fail_msg: >-
+      vault_indexer_admin_hash and vault_dashboard_kibanaserver_hash must be bcrypt hashes
+      generated with the indexer's hash.sh (see README).
+    quiet: true
+
+- name: Check addresses and sizing
+  ansible.builtin.assert:
+    that:
+      - wazuh_bind_ts_ip is match('^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}$')
+      - wazuh_bind_lan_ip is match('^\d{1,3}(\.\d{1,3}){3}$')
+      - wazuh_bind_lan_ip != wazuh_bind_ts_ip
+      - wazuh_server_magicdns | length > 0
+      - wazuh_indexer_heap is match('^\d+[gm]$')
+      - wazuh_retention_days | int > 0
+      - not (wazuh_enable_syslog | bool) or (wazuh_syslog_allowed_ips | length > 0)
+    fail_msg: >-
+      Check the inventory: wazuh_bind_ts_ip must be the server's Tailscale address (inside 100.64.0.0/10),
+      wazuh_bind_lan_ip its LAN IPv4 address, wazuh_server_magicdns its MagicDNS name,
+      wazuh_indexer_heap like "4g", and wazuh_syslog_allowed_ips non-empty when wazuh_enable_syslog is true.
+    quiet: true

@@ -1,0 +1,22 @@
+<!-- {{ ansible_managed }} -->
+<!-- Centralized config for agent group "{{ wazuh_host_agent_group }}" (the Docker host itself). -->
+<agent_config>
+
+  <!-- Disk usage of / for rules 100110/100111. Needs logcollector.remote_commands=1 on the agent. -->
+  <localfile>
+    <log_format>command</log_format>
+    <command>df -P /</command>
+    <frequency>{{ wazuh_host_df_interval }}</frequency>
+  </localfile>
+{% if wazuh_mcp_enabled | bool %}
+
+  <!-- Only the MCP container's logs (Docker journald driver, tag wazuh-mcp).
+       The Wazuh containers stay on Docker's default driver and are NOT collected. -->
+  <localfile>
+    <location>journald</location>
+    <log_format>journald</log_format>
+    <filter field="SYSLOG_IDENTIFIER">^wazuh-mcp$</filter>
+  </localfile>
+{% endif %}
+
+</agent_config>

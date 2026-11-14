@@ -1,0 +1,46 @@
+---
+# Why restarts: the manager image copies /wazuh-config-mount/* into /var/ossec only at
+# container start, and a single-file bind mount keeps pointing at the old inode after
+# Ansible replaces the file. Each handler is skipped when compose already (re)created or
+# started that container in this run.
+- name: Restart wazuh manager
+  community.docker.docker_compose_v2:
+    project_src: "{{ wazuh_compose_dir }}"
+    files: "{{ wazuh_compose_files }}"
+    services:
+      - wazuh.manager
+    state: restarted
+  when: >-
+    wazuh_server_compose_up is not defined or
+    (wazuh_server_compose_up.actions | default([])
+    | selectattr('what', 'equalto', 'container')
+    | selectattr('id', 'search', 'wazuh\.manager')
+    | list | length == 0)
+
+- name: Restart wazuh indexer
+  community.docker.docker_compose_v2:
+    project_src: "{{ wazuh_compose_dir }}"
+    files: "{{ wazuh_compose_files }}"
+    services:
+      - wazuh.indexer
+    state: restarted
+  when: >-
+    wazuh_server_compose_up is not defined or
+    (wazuh_server_compose_up.actions | default([])
+    | selectattr('what', 'equalto', 'container')
+    | selectattr('id', 'search', 'wazuh\.indexer')
+    | list | length == 0)
+
+- name: Restart wazuh dashboard
+  community.docker.docker_compose_v2:
+    project_src: "{{ wazuh_compose_dir }}"
+    files: "{{ wazuh_compose_files }}"
+    services:
+      - wazuh.dashboard
+    state: restarted
+  when: >-
+    wazuh_server_compose_up is not defined or
+    (wazuh_server_compose_up.actions | default([])
+    | selectattr('what', 'equalto', 'container')
+    | selectattr('id', 'search', 'wazuh\.dashboard')
+    | list | length == 0)

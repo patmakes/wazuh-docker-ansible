@@ -1,0 +1,35 @@
+---
+# Copy to inventory/group_vars/vault.yml, fill in, then:
+#   ansible-vault encrypt inventory/group_vars/vault.yml
+# NEVER commit the unencrypted file (it is git-ignored as a safeguard).
+# The playbooks load it with vars_files and refuse to run while any value below is
+# missing, still a CHANGEME placeholder, or equal to an upstream default.
+
+# --- Indexer / dashboard -------------------------------------------------------
+# >= 8 chars with upper, lower, digit and symbol.
+vault_indexer_admin_password: "CHANGEME"
+vault_dashboard_kibanaserver_password: "CHANGEME"
+# bcrypt hashes of the two passwords above, from:
+#   docker run --rm -it wazuh/wazuh-indexer:4.14.8 \
+#     bash /usr/share/wazuh-indexer/plugins/opensearch-security/tools/hash.sh
+vault_indexer_admin_hash: "CHANGEME"
+vault_dashboard_kibanaserver_hash: "CHANGEME"
+
+# --- Manager API (user wazuh-wui) ----------------------------------------------
+# 8-64 chars with upper, lower, digit and symbol.
+vault_wazuh_api_password: "CHANGEME"
+
+# --- Agent enrollment (authd.pass) ---------------------------------------------
+vault_agent_enrollment_password: "CHANGEME"
+
+# --- MCP endpoint (only read when wazuh_mcp_enabled: true) ---------------------
+# openssl rand -hex 32
+vault_mcp_auth_secret: "CHANGEME"
+# python3 -c "import secrets; print('wazuh_' + secrets.token_urlsafe(32))"
+vault_mcp_api_key: "CHANGEME"
+# Same password rules as above. No single quotes (they end up in an env file).
+vault_mcp_api_password: "CHANGEME"
+vault_mcp_indexer_password: "CHANGEME"
+
+# --- Windows hosts (only if you use password auth / WinRM) ---------------------
+# vault_windows_password: "CHANGEME"

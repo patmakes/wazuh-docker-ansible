@@ -1,0 +1,6 @@
+---
+- name: Deploy the Wazuh server
+  ansible.builtin.import_playbook: server.yml
+
+- name: Deploy Wazuh agents
+  ansible.builtin.import_playbook: agents.yml

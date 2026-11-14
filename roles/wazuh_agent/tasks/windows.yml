@@ -1,0 +1,33 @@
+---
+# Plain MSI install (no Chocolatey). win_package is idempotent on the MSI product code.
+- name: Check for an existing enrollment
+  ansible.windows.win_stat:
+    path: '{{ wazuh_agent_windows_dir }}\client.keys'
+  register: wazuh_agent_client_keys
+
+- name: Download the Wazuh agent MSI
+  ansible.windows.win_get_url:
+    url: "{{ wazuh_agent_windows_msi_url }}"
+    dest: 'C:\Windows\Temp\wazuh-agent-{{ wazuh_version }}-{{ wazuh_agent_package_revision }}.msi'
+    force: false
+
+- name: Install wazuh-agent {{ wazuh_version }}
+  ansible.windows.win_package:
+    path: 'C:\Windows\Temp\wazuh-agent-{{ wazuh_version }}-{{ wazuh_agent_package_revision }}.msi'
+    state: present
+    arguments: >-
+      {{
+        ['/q',
+         'WAZUH_MANAGER=' ~ wazuh_manager_address,
+         'WAZUH_AGENT_GROUP=' ~ wazuh_agent_group,
+         'WAZUH_AGENT_NAME=' ~ wazuh_agent_name]
+        + ([] if (wazuh_agent_client_keys.stat.exists and wazuh_agent_client_keys.stat.size > 0)
+           else ['WAZUH_REGISTRATION_PASSWORD=' ~ vault_agent_enrollment_password])
+      }}
+  no_log: true
+
+- name: Enable and start the agent service
+  ansible.windows.win_service:
+    name: WazuhSvc
+    start_mode: auto
+    state: started

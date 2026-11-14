@@ -1,0 +1,149 @@
+<!--
+  PROVISIONAL rules for the Wazuh MCP server, IDs 100100-100109 and 100112-100114
+  (100110/100111 are the host disk-usage rules in host_rules.xml). See mcp_decoders.xml for
+  where the log formats come from; confirm with scripts/mcp-log-samples.sh before relying
+  on them.
+
+  Two sources:
+    A. The MCP container's own log (journald tag wazuh-mcp, via the host agent): 100100-100107.
+    B. The Wazuh manager API's request log (api.log, read by the manager): 100112-100114.
+       This is the view from the other side: what the MCP service account actually asked
+       Wazuh for. It fills most of the gaps in A.
+
+  What upstream MCP server v5.0.0 does and does not log (LOG_LEVEL=INFO):
+    - Read tool calls are NOT logged by the application; the access log only shows
+      "POST /mcp" (100101). 100112 adds the Wazuh API endpoint each call hit. Tools that
+      only query the indexer (alerts, vulnerabilities) leave no trace in api.log.
+    - A write tool refused by scope (wazuh:read token) or by the confirmation gate is
+      returned to the client as a tool error and is NOT logged anywhere: the request never
+      leaves the MCP server. No rule here can see it. This needs an upstream change.
+    - A write call that gets past those gates is logged twice over: by the audit logger
+      (100102, then 100103 on failure or 100105 on success) and, when it reaches Wazuh, in
+      api.log (100113, and 100114 if RBAC denies it).
+    - Authentication failures are HTTP 401 lines in the access log (100107/100104). The
+      source address is the tailnet client only while FORWARDED_ALLOW_IPS is set
+      (wazuh_mcp_forwarded_allow_ips); otherwise it is the Docker bridge gateway.
+-->
+<group name="wazuh_mcp,">
+
+  <!-- Base rule: anything from the MCP container. Search rule.groups: wazuh_mcp. -->
+  <rule id="100100" level="3">
+    <decoded_as>wazuh-mcp</decoded_as>
+    <description>Wazuh MCP server: container log event.</description>
+  </rule>
+
+  <!-- Health/readiness/metrics probes (the container healthcheck runs every 15 s). -->
+  <rule id="100106" level="0">
+    <if_sid>100100</if_sid>
+    <url type="pcre2">^/(?:health|ready|metrics)$</url>
+    <field name="mcp.http_status" type="pcre2">^200$</field>
+    <description>Wazuh MCP server: probe request (ignored).</description>
+  </rule>
+
+  <!-- Tool call. Reduced to "MCP request served": upstream logs no tool name or principal
+       for read calls (see header). -->
+  <rule id="100101" level="3">
+    <if_sid>100100</if_sid>
+    <url type="pcre2">^/mcp</url>
+    <field name="mcp.http_status" type="pcre2">^2\d\d$</field>
+    <description>Wazuh MCP server: MCP request served ($(mcp.http_method) $(url)).</description>
+  </rule>
+
+  <!-- Any entry from the audit logger: a write tool got past the scope and confirmation gates. -->
+  <rule id="100102" level="8">
+    <if_sid>100100</if_sid>
+    <field name="mcp.logger" type="pcre2">^wazuh_mcp_server\.audit$</field>
+    <description>Wazuh MCP server: audit entry for write tool $(mcp.tool) by $(mcp.principal).</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>audit,</group>
+  </rule>
+
+  <!-- Write tool failed after the scope and confirmation gates (e.g. denied by Wazuh RBAC).
+       A refusal AT those gates is not logged by upstream v5.0.0 (see header). -->
+  <rule id="100103" level="10">
+    <if_sid>100102</if_sid>
+    <field name="mcp.outcome" type="pcre2">^failure$</field>
+    <description>Wazuh MCP server: write tool $(mcp.tool) by $(mcp.principal) got past the MCP gates and then failed.</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>audit,</group>
+  </rule>
+
+  <!-- A write tool succeeded. Must never fire while write tools are disabled. -->
+  <rule id="100105" level="12">
+    <if_sid>100102</if_sid>
+    <field name="mcp.outcome" type="pcre2">^success$</field>
+    <description>Wazuh MCP server: write tool $(mcp.tool) by $(mcp.principal) SUCCEEDED.</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>audit,</group>
+  </rule>
+
+  <!-- Single authentication failure (bad or missing bearer token, bad API key). -->
+  <rule id="100107" level="5">
+    <if_sid>100100</if_sid>
+    <field name="mcp.http_status" type="pcre2">^401$</field>
+    <description>Wazuh MCP server: authentication failure ($(mcp.http_method) $(url)).</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>authentication_failed,</group>
+  </rule>
+
+  <!-- Five or more authentication failures in 60 s. -->
+  <rule id="100104" level="10" frequency="5" timeframe="60">
+    <if_matched_sid>100107</if_matched_sid>
+    <same_source_ip />
+    <description>Wazuh MCP server: repeated authentication failures.</description>
+    <mitre>
+      <id>T1078</id>
+      <id>T1110</id>
+    </mitre>
+    <group>authentication_failures,</group>
+  </rule>
+
+  <!-- ===== Source B: the manager API request log ===== -->
+
+  <!-- Any API request made by the MCP service account: the per-endpoint trail for read calls. -->
+  <rule id="100112" level="3">
+    <decoded_as>wazuh-api-log</decoded_as>
+    <field name="api.user" type="pcre2">^mcp-readonly$</field>
+    <description>Wazuh API request by the MCP service account: $(api.method) $(url) -> $(api.status).</description>
+  </rule>
+
+  <!-- The service account's own logins (token refresh) are routine. -->
+  <rule id="100109" level="0">
+    <if_sid>100112</if_sid>
+    <url type="pcre2">^/security/user/authenticate</url>
+    <description>Wazuh API login by the MCP service account (ignored).</description>
+  </rule>
+
+  <!-- Denied by RBAC: the account asked for something outside its read-only policies. -->
+  <rule id="100114" level="10">
+    <if_sid>100112</if_sid>
+    <field name="api.status" type="pcre2">^403$</field>
+    <description>Wazuh API denied the MCP service account: $(api.method) $(url).</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>access_denied,</group>
+  </rule>
+
+  <!-- A state-changing request reached Wazuh from the read-only account. Must never fire
+       while write tools are disabled, whatever the status code. -->
+  <rule id="100113" level="12">
+    <if_sid>100112</if_sid>
+    <field name="api.method" type="pcre2">^(?!GET$)</field>
+    <url type="pcre2">^(?!/security/user/authenticate)</url>
+    <description>Wazuh API: the MCP service account sent a state-changing request: $(api.method) $(url) -> $(api.status).</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>audit,</group>
+  </rule>
+
+</group>

@@ -1,0 +1,41 @@
+---
+# Idempotent `tailscale serve`: only (re)configures the mapping when the root handler
+# for this HTTPS port does not already proxy to the wanted target.
+- name: Require a target for tailscale serve
+  ansible.builtin.assert:
+    that:
+      - tailscale_serve_target | length > 0
+    quiet: true
+
+- name: Read tailscale serve config
+  ansible.builtin.command:
+    cmd: tailscale serve status --json
+  register: tailscale_serve_status
+  changed_when: false
+  check_mode: false
+
+- name: Work out the current proxy target for port {{ tailscale_serve_https_port }}
+  ansible.builtin.set_fact:
+    tailscale_serve_current: >-
+      {{
+        ((tailscale_serve_status.stdout | default('', true) | trim) or '{}') | from_json
+        | default({}, true) | dict2items
+        | selectattr('key', 'equalto', 'Web') | map(attribute='value') | map('default', {}, true)
+        | map('dict2items') | flatten
+        | selectattr('key', 'match', '.*:' ~ tailscale_serve_https_port ~ '$')
+        | map(attribute='value.Handlers') | map('default', {}, true)
+        | map('dict2items') | flatten
+        | selectattr('key', 'equalto', '/')
+        | map(attribute='value.Proxy') | list
+      }}
+
+- name: Publish the backend on tailnet HTTPS port {{ tailscale_serve_https_port }}
+  ansible.builtin.command:
+    argv:
+      - tailscale
+      - serve
+      - --bg
+      - "--https={{ tailscale_serve_https_port }}"
+      - "{{ tailscale_serve_target }}"
+  when: tailscale_serve_target not in tailscale_serve_current
+  changed_when: true

@@ -1,0 +1,14 @@
+---
+# Wazuh release for the server stack AND every agent. Stay on 4.14.x (5.0 is out of scope).
+wazuh_version: "4.14.8"
+
+# MagicDNS name of the Wazuh server, e.g. "wazuh01.example-tailnet.ts.net".
+# Tailnet agents enroll against it; the dashboard is https://<this name>.
+wazuh_server_magicdns: ""
+
+# LAN address of the Wazuh server. Lives here (not in wazuh_server.yml) because
+# LAN agents need it as their manager address.
+wazuh_bind_lan_ip: ""
+
+# Optional read-only MCP endpoint on the Wazuh host (Phases 7-8). See README.
+wazuh_mcp_enabled: false

@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+# Base: wazuh-docker v4.14.8 single-node/config/wazuh_dashboard/wazuh.yml
+hosts:
+  - 1513629884013:
+      url: "https://wazuh.manager"
+      port: 55000
+      username: wazuh-wui
+      password: {{ vault_wazuh_api_password | to_json }}
+      run_as: true
