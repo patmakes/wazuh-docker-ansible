@@ -27,6 +27,9 @@ after deploying.
   vault passwords, sets the indexer heap, and remounts the config files.
 - Secrets come only from an `ansible-vault` file. The playbook refuses to run if a secret is
   missing or still equals an upstream default.
+- ISM policies delete `wazuh-alerts-*` indices after `wazuh_retention_days` (90) and
+  `wazuh-archives-*` after `wazuh_archives_retention_days` (30). Archives are only written if you
+  turn on `logall_json`, but they grow far faster than alerts, so their policy is in place first.
 
 ## Prerequisites
 
@@ -62,7 +65,8 @@ Steps marked 🧑 are manual.
    Transparency logs, so pick a hostname you don't mind being visible.
 3. 🧑 **Tailscale policy.** Merge `tailscale/acl-snippet.hujson` into the tailnet policy file
    (review it against your existing rules first: a bad policy can lock you out), and tag every
-   tailnet host that will run an agent with `tag:wazuh-agent`. See [Tailscale ACLs](#tailscale-acls).
+   tailnet host that will run an agent with `tag:wazuh-agent`. Remove or narrow the default
+   allow-all rule, or the snippet restricts nothing. See [Tailscale ACLs](#tailscale-acls).
 4. 🧑 **Secrets.** Choose passwords, then generate bcrypt hashes for the indexer `admin` and
    `kibanaserver` passwords (run once per password):
    ```
@@ -125,6 +129,13 @@ this repo does not set up.
 
 The snippet uses `autogroup:admin` and `"deploy"` as placeholders. Replace them before pasting.
 
+> **Remove the default allow-all rule.** The snippet only *adds* grants. Tailscale's default
+> policy contains an allow-all grant (`"src": ["*"], "dst": ["*"], "ip": ["*"]`, or `"*:*"` in an
+> older `acls` section); while it is there, every tailnet device can reach 1514/1515, the dashboard
+> and the MCP endpoint, and the snippet restricts nothing. Delete or narrow it when you merge,
+> after adding grants for anything else on the tailnet that depended on it. Then check from a
+> device that should *not* have access (see [VERIFY.md](VERIFY.md), Phase 5/7).
+
 ## Agents
 
 ### Add an agent
@@ -163,7 +174,10 @@ With `wazuh_host_agent_enabled: true` (default), the server also runs an ordinar
 inside its container; this one gives the Docker host itself FIM, SCA and auth-log monitoring, plus:
 
 - **Disk usage.** `df -P /` every 5 minutes. Rule 100110 (level 7) fires at ≥ 80% and 100111
-  (level 12) at ≥ 90%. The indexer goes read-only at its 95% flood-stage watermark.
+  (level 12) at ≥ 90%. The indexer goes read-only at its 95% flood-stage watermark. The command is
+  in the agent's own `ossec.conf` (`wazuh_agent_local_commands`), not the group's `agent.conf`:
+  `logcollector.remote_commands` stays off on every agent, because it would let anyone who
+  controls the manager (or a dashboard admin) run commands as root on the agent's host.
 - **MCP container logs**, when the MCP endpoint is enabled.
 
 ## Local rules
@@ -310,10 +324,15 @@ to check them against real lines.
   an upstream change would fix that. What the rules do guarantee is that any write call that gets
   *past* those gates is caught twice: 100102/100103/100105 from the audit logger and 100113/100114
   from the API log.
-- *Client address.* `wazuh_mcp_forwarded_allow_ips: "*"` makes the access log show the tailnet
-  client from `X-Forwarded-For` (set by `tailscale serve`) instead of the Docker bridge gateway, so
-  100104 counts per client. Trusting any peer is safe only because port 3000 is published on
-  loopback alone. Set it to `""` to turn it off; 100104 then counts all clients together.
+- *Client address.* The compose network has a fixed subnet (`wazuh_docker_subnet`, default
+  `172.30.30.0/24`), and the MCP server trusts `X-Forwarded-For` only from its gateway
+  (`wazuh_mcp_forwarded_allow_ips: "{{ wazuh_docker_gateway }}"`), the address `tailscale serve`
+  traffic arrives from. uvicorn then takes the right-most entry, which `tailscale serve` appended,
+  so a client cannot choose the address that 100104 counts by. Set it to `""` to turn it off;
+  100104 then counts all clients together. Change the subnet if it clashes with a LAN or VPN route.
+  A stack deployed before the subnet was pinned stops the playbook with a message: run
+  `sudo docker compose down` (no `-v`; volumes are kept) in `/opt/wazuh/wazuh-docker/single-node`
+  once, then re-run.
 - Rules 100109 and 100112–100114 match the user name `mcp-readonly` literally. Change
   `roles/wazuh_mcp/files/mcp_rules.xml` too if you change `wazuh_mcp_api_user`.
 

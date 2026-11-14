@@ -1,4 +1,24 @@
 ---
+# A network created before the subnet was pinned keeps Docker's random one, and Compose will not
+# change it under running containers. Stop with instructions rather than tearing the stack down.
+- name: Read the existing compose network
+  community.docker.docker_network_info:
+    name: "{{ wazuh_docker_network }}"
+  register: wazuh_docker_network_info
+
+- name: Check the compose network has the pinned subnet
+  ansible.builtin.assert:
+    that:
+      - (wazuh_docker_network_info.network.IPAM.Config | default([], true) | map(attribute='Subnet') | list)
+        == [wazuh_docker_subnet]
+    fail_msg: >-
+      Network {{ wazuh_docker_network }} exists with subnet
+      {{ wazuh_docker_network_info.network.IPAM.Config | default([], true) | map(attribute='Subnet') | list }},
+      not {{ wazuh_docker_subnet }}. Recreate it once (data volumes are kept):
+      cd {{ wazuh_compose_dir }} && sudo docker compose down (no -v), then re-run the playbook.
+    quiet: true
+  when: wazuh_docker_network_info.exists
+
 - name: Bring the Wazuh stack up
   community.docker.docker_compose_v2:
     project_src: "{{ wazuh_compose_dir }}"

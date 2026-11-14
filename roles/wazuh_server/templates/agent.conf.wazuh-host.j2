@@ -1,13 +1,8 @@
 <!-- {{ ansible_managed }} -->
 <!-- Centralized config for agent group "{{ wazuh_host_agent_group }}" (the Docker host itself). -->
 <agent_config>
-
-  <!-- Disk usage of / for rules 100110/100111. Needs logcollector.remote_commands=1 on the agent. -->
-  <localfile>
-    <log_format>command</log_format>
-    <command>df -P /</command>
-    <frequency>{{ wazuh_host_df_interval }}</frequency>
-  </localfile>
+<!-- No command entries here: agents keep remote commands disabled. The disk check (df -P /,
+     rules 100110/100111) is in the host agent's own ossec.conf (wazuh_agent_local_commands). -->
 {% if wazuh_mcp_enabled | bool %}
 
   <!-- Only the MCP container's logs (Docker journald driver, tag wazuh-mcp).

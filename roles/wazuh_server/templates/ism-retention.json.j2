@@ -1,6 +1,6 @@
 {
   "policy": {
-    "description": "Delete wazuh-alerts indices older than {{ wazuh_retention_days }} days (managed by Ansible)",
+    "description": "Delete {{ wazuh_ism.pattern }} indices older than {{ wazuh_ism.days }} days (managed by Ansible)",
     "default_state": "hot",
     "states": [
       {
@@ -10,7 +10,7 @@
           {
             "state_name": "delete",
             "conditions": {
-              "min_index_age": "{{ wazuh_retention_days }}d"
+              "min_index_age": "{{ wazuh_ism.days }}d"
             }
           }
         ]
@@ -27,7 +27,7 @@
     ],
     "ism_template": [
       {
-        "index_patterns": ["wazuh-alerts-*"],
+        "index_patterns": ["{{ wazuh_ism.pattern }}"],
         "priority": 100
       }
     ]

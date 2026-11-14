@@ -1,6 +1,6 @@
 <!--
   Rules for the agent on the Docker host (group wazuh-host).
-  The group's agent.conf runs `df -P /` every 5 minutes. The indexer stops accepting
+  The host agent's local ossec.conf runs `df -P /` every 5 minutes. The indexer stops accepting
   writes at its 95% flood-stage watermark, so these fire first.
   Rule 530 is the stock parent for "ossec: output:" command events.
 -->

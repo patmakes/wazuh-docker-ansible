@@ -64,6 +64,16 @@ host, *control* on the Ansible control node, *client* on another tailnet device.
   sudo docker exec -it single-node-wazuh.indexer-1 \
     curl -sk -u admin 'https://localhost:9200/_plugins/_ism/explain/wazuh-alerts-*?pretty'
   ```
+  The archive policy exists as well (its indices only appear if `logall_json` is turned on):
+  ```
+  sudo docker exec -it single-node-wazuh.indexer-1 \
+    curl -sk -u admin https://localhost:9200/_plugins/_ism/policies/wazuh-archives-retention
+  ```
+- [ ] *server* — the compose network has the pinned subnet:
+  ```
+  sudo docker network inspect -f '{{range .IPAM.Config}}{{.Subnet}} {{.Gateway}}{{end}}' single-node_default
+  ```
+  Expected: `172.30.30.0/24 172.30.30.1` (or your `wazuh_docker_subnet`/`wazuh_docker_gateway`).
 - [ ] *control* — a second run reports `changed=0`:
   ```
   ansible-playbook playbooks/server.yml --ask-vault-pass
@@ -93,6 +103,13 @@ No checks are listed in the plan for this phase. Suggested: the host is **Active
 No checks are listed in the plan. Suggested, from a host tagged `tag:wazuh-agent`:
 `nc -vz <magicdns> 1514` succeeds and `nc -vz -w 5 <magicdns> 443` times out.
 
+- [ ] The default allow-all rule is gone (the snippet only adds grants). From a tailnet device
+  that is neither tagged `tag:wazuh-agent` nor an admin device, all of these time out:
+  ```
+  nc -vz -w 5 <magicdns> 1514; nc -vz -w 5 <magicdns> 443; nc -vz -w 5 <magicdns> 8443
+  ```
+  If any connects, an allow-all (or other broad) rule is still in the tailnet policy.
+
 ## Phase 7: MCP endpoint (`wazuh_mcp_enabled: true`)
 
 - [ ] *server* — still nothing on 55000/9200, and 3000 only on `127.0.0.1`:
@@ -103,6 +120,17 @@ No checks are listed in the plan. Suggested, from a host tagged `tag:wazuh-agent
   tailnet device it times out:
   ```
   curl -sS --max-time 10 https://<magicdns>:8443/health
+  ```
+- [ ] *server* — the MCP server trusts `X-Forwarded-For` only from the pinned gateway, so a client
+  cannot spoof its logged address. From an MCP client host:
+  ```
+  curl -s -o /dev/null -H 'X-Forwarded-For: 203.0.113.9' -H 'Authorization: Bearer bad' \
+    -X POST https://<magicdns>:8443/mcp
+  ```
+  then on the server the 401 line shows the client's tailnet IP, not `203.0.113.9`:
+  ```
+  sudo docker exec single-node-wazuh-mcp-1 printenv FORWARDED_ALLOW_IPS   # expect 172.30.30.1
+  sudo journalctl -t wazuh-mcp --since -2min --no-pager | grep ' 401'
   ```
 - [ ] *client or server* — smoke test against 4.14.8 (plain curl + python3, no Claude tooling):
   `initialize`, `tools/list`, then `tools/call` for listing agents, recent alerts and
@@ -171,8 +199,12 @@ No checks are listed in the plan. Suggested, from a host tagged `tag:wazuh-agent
 - [ ] Disk-usage collection works: in the dashboard, search `agent.name: <hostname>-host` and
   `full_log: "df -P /"` (visible only once a threshold rule fires), or on the server:
   ```
-  sudo grep remote_commands /var/ossec/etc/local_internal_options.conf
-  sudo grep -c "df -P /" /var/ossec/etc/shared/agent.conf
+  sudo grep -B2 -A2 "df -P /" /var/ossec/etc/ossec.conf
+  ```
+- [ ] Remote commands are off on the host agent, and the group config pushes no commands:
+  ```
+  sudo grep remote_commands /var/ossec/etc/local_internal_options.conf   # expect no output
+  sudo grep -c '<command>' /var/ossec/etc/shared/agent.conf              # expect 0
   ```
 
 ## Static checks that were not possible when the repo was written

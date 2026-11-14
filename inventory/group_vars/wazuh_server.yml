@@ -7,6 +7,8 @@ wazuh_indexer_heap: "4g"
 
 # wazuh-alerts-* indices older than this are deleted by an ISM policy.
 wazuh_retention_days: 90
+# Same for wazuh-archives-* (only written if you turn on logall_json; it grows much faster).
+wazuh_archives_retention_days: 30
 
 # LAN syslog listener on 514/udp. When true, wazuh_syslog_allowed_ips must list the senders.
 wazuh_enable_syslog: false

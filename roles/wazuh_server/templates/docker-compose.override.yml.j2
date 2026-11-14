@@ -42,3 +42,11 @@ services:
       API_PASSWORD: {{ vault_wazuh_api_password | replace('$', '$$') | to_json }}
     volumes:
       - {{ wazuh_deploy_dir }}/wazuh.yml:/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
+
+# Fixed subnet: the gateway is the only peer the MCP server trusts for X-Forwarded-For.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: {{ wazuh_docker_subnet }}
+          gateway: {{ wazuh_docker_gateway }}

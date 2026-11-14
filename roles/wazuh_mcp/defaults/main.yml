@@ -33,12 +33,12 @@ wazuh_mcp_allowed_origins:
   - "https://{{ wazuh_server_magicdns }}:{{ wazuh_mcp_https_port }}"
 
 # Peers whose X-Forwarded-For uvicorn trusts for the access log (FORWARDED_ALLOW_IPS).
-# `tailscale serve` sets that header to the tailnet client, but reaches the container
-# through Docker's bridge gateway, whose address is not fixed; "*" trusts any peer. That is
-# safe here only because port 3000 is published on 127.0.0.1 alone. Without it every
-# request is logged from the gateway address and rule 100104 cannot tell clients apart.
-# Set "" to turn it off.
-wazuh_mcp_forwarded_allow_ips: "*"
+# `tailscale serve` appends the tailnet client to that header and reaches the container through
+# the compose network's gateway (pinned by wazuh_docker_gateway). Trusting only that address makes
+# uvicorn take the right-most entry, the one tailscale added; "*" would take the left-most, which
+# the client controls, and let it pick the address rule 100104 counts by.
+# Set "" to turn it off (every request is then logged from the gateway address).
+wazuh_mcp_forwarded_allow_ips: "{{ wazuh_docker_gateway }}"
 
 # Rules 100112-100114 match this user name literally: keep roles/wazuh_mcp/files/mcp_rules.xml
 # in step if you change wazuh_mcp_api_user.

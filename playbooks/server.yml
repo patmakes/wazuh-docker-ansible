@@ -19,7 +19,9 @@
         wazuh_manager_address: "{{ wazuh_bind_lan_ip }}"
         wazuh_agent_group: "{{ wazuh_host_agent_group }}"
         wazuh_agent_name: "{{ inventory_hostname }}-host"
-        # The group's centralized agent.conf runs `df -P /`; agents ignore remote
-        # commands unless this is enabled locally.
-        wazuh_agent_remote_commands: true
+        # Disk check for rules 100110/100111, in the agent's own ossec.conf rather than the
+        # group's agent.conf, so remote commands from the manager stay disabled.
+        wazuh_agent_local_commands:
+          - command: "df -P /"
+            frequency: "{{ wazuh_host_df_interval }}"
       when: wazuh_host_agent_enabled | bool

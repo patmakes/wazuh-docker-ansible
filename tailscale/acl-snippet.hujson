@@ -3,6 +3,12 @@
 // do not replace the whole file. Review against your current rules first: a bad policy can
 // lock you out.
 //
+// IMPORTANT: these grants only ADD access. If your policy still has the default allow-all rule
+// ({"src": ["*"], "dst": ["*"], "ip": ["*"]}, or an old-style "acls" accept of "*:*"), every
+// device can still reach 1514/1515, the dashboard and the MCP endpoint, and this snippet
+// restricts nothing. Remove or narrow that rule when you merge, after adding grants for
+// whatever else on your tailnet relied on it.
+//
 // Placeholders to replace before pasting:
 //   autogroup:admin        -> your own account or group, if you want it narrower than all tailnet admins
 //   tag:wazuh-mcp-client   -> keep the tag (and tag the ollama-server and Code North hosts with it),

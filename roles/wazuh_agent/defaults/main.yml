@@ -14,6 +14,8 @@ wazuh_agent_windows_msi_url: >-
   https://packages.wazuh.com/4.x/windows/wazuh-agent-{{ wazuh_version }}-{{ wazuh_agent_package_revision }}.msi
 wazuh_agent_windows_dir: 'C:\Program Files (x86)\ossec-agent'
 
-# Let the manager's centralized agent.conf run commands on this agent
-# (logcollector.remote_commands=1). Only turned on for the Wazuh host's own agent.
-wazuh_agent_remote_commands: false
+# Command-monitoring <localfile> entries written into this agent's own ossec.conf, e.g.
+#   - {command: "df -P /", frequency: 300}
+# Commands are configured locally on purpose: logcollector.remote_commands stays off, so the
+# manager (or a dashboard admin) cannot push commands that the agent would run as root.
+wazuh_agent_local_commands: []

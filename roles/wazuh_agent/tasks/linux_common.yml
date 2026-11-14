@@ -1,15 +1,30 @@
 ---
 # Shared by debian.yml and redhat.yml, after the package is installed.
-- name: Allow commands from the centralized agent.conf
+# Never let the manager push commands: an agent runs them as root. (Earlier versions of this
+# repo set remote_commands=1 on the Wazuh host's agent; this removes it.)
+- name: Keep remote commands from the manager disabled
   ansible.builtin.lineinfile:
     path: /var/ossec/etc/local_internal_options.conf
     regexp: '^logcollector\.remote_commands='
-    line: logcollector.remote_commands=1
-    owner: root
-    group: wazuh
-    mode: "0640"
-    create: true
-  when: wazuh_agent_remote_commands | bool
+    state: absent
+  notify: Restart wazuh agent
+
+# ossec.conf may hold several <ossec_config> sections; this one is ours. An empty list removes it.
+- name: Configure local command monitoring
+  ansible.builtin.blockinfile:
+    path: /var/ossec/etc/ossec.conf
+    marker: "<!-- {mark} ANSIBLE MANAGED: local commands -->"
+    block: |
+      <ossec_config>
+      {% for item in wazuh_agent_local_commands %}
+        <localfile>
+          <log_format>command</log_format>
+          <command>{{ item.command | e }}</command>
+          <frequency>{{ item.frequency | default(360) | int }}</frequency>
+        </localfile>
+      {% endfor %}
+      </ossec_config>
+    state: "{{ 'present' if wazuh_agent_local_commands | length > 0 else 'absent' }}"
   notify: Restart wazuh agent
 
 - name: Enable and start the agent

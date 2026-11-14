@@ -43,24 +43,28 @@ json_field() { python3 -c 'import json,sys; d=json.load(sys.stdin); print(eval(s
 echo "== health"
 curl -fsS "$MCP_URL/health" | json_field 'd.get("status")'
 
+# Secrets never go on a command line (visible in ps): the key goes in on stdin, and the token
+# reaches curl as a config file on stdin (-K -), written by the shell builtin printf.
 echo "== token (POST /auth/token)"
-TOKEN="$(curl -fsS -X POST "$MCP_URL/auth/token" -H 'Content-Type: application/json' \
-  -d "{\"api_key\": \"$MCP_API_KEY\"}" | json_field 'd["access_token"]')"
+TOKEN="$(printf '{"api_key": "%s"}' "$MCP_API_KEY" | curl -fsS -X POST "$MCP_URL/auth/token" \
+  -H 'Content-Type: application/json' --data-binary @- | json_field 'd["access_token"]')"
 echo "ok"
+
+auth_cfg() { printf 'header = "Authorization: Bearer %s"\n' "$TOKEN"; }
 
 # rpc <session-id-or-empty> <json body>  -> response body on stdout
 rpc() {
   local session="$1" body="$2"
-  local -a hdr=(-H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'
+  local -a hdr=(-H 'Content-Type: application/json'
     -H 'Accept: application/json' -H "MCP-Protocol-Version: $PROTOCOL_VERSION")
   [ -n "$session" ] && hdr+=(-H "MCP-Session-Id: $session")
-  curl -sS -X POST "$MCP_URL/mcp" "${hdr[@]}" -d "$body"
+  auth_cfg | curl -sS -K - -X POST "$MCP_URL/mcp" "${hdr[@]}" -d "$body"
 }
 
 echo "== initialize"
 INIT_HEADERS="$OUT_DIR/initialize.headers"
-curl -sS -D "$INIT_HEADERS" -o "$OUT_DIR/initialize.json" -X POST "$MCP_URL/mcp" \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -H 'Accept: application/json' \
+auth_cfg | curl -sS -K - -D "$INIT_HEADERS" -o "$OUT_DIR/initialize.json" -X POST "$MCP_URL/mcp" \
+  -H 'Content-Type: application/json' -H 'Accept: application/json' \
   -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"$PROTOCOL_VERSION\",\"capabilities\":{},\"clientInfo\":{\"name\":\"mcp-log-samples\",\"version\":\"1\"}}}"
 SESSION="$(tr -d '\r' < "$INIT_HEADERS" | awk 'tolower($1)=="mcp-session-id:" {print $2}')"
 json_field 'd["result"]["serverInfo"]' < "$OUT_DIR/initialize.json"

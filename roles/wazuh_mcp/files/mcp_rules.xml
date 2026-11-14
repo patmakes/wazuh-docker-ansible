@@ -22,7 +22,7 @@
       api.log (100113, and 100114 if RBAC denies it).
     - Authentication failures are HTTP 401 lines in the access log (100107/100104). The
       source address is the tailnet client only while FORWARDED_ALLOW_IPS is set
-      (wazuh_mcp_forwarded_allow_ips); otherwise it is the Docker bridge gateway.
+      (wazuh_mcp_forwarded_allow_ips, the pinned bridge gateway); otherwise it is that gateway.
 -->
 <group name="wazuh_mcp,">
 
