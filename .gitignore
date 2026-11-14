@@ -1,0 +1,195 @@
+# .gitignore for wazuh-docker-ansible
+#
+# Rule of thumb: the repo holds only templates, examples and placeholder values.
+# Anything with a real secret, a real host/IP, a certificate or a captured log stays
+# local. When adding a new "real" file, use the *.example.* naming for the
+# committed placeholder copy, which the negations below keep tracked.
+
+# ---------------------------------------------------------------------------
+# Ansible Vault and vault passwords
+# ---------------------------------------------------------------------------
+# The vault is never committed, encrypted or not (IMPLEMENTATION_PLAN Phase 2).
+**/vault.yml
+**/vault.yaml
+**/vault_*.yml
+**/vault_*.yaml
+**/vault-*.yml
+**/vault-*.yaml
+**/group_vars/*/vault*
+**/host_vars/*/vault*
+!**/vault.example.yml
+# Decrypted / edited copies left behind by `ansible-vault view|decrypt` or editors
+*.decrypted
+*.decrypted.*
+*.plain
+*.plaintext
+# Vault password files and scripts
+.vault_pass*
+.vault-pass*
+.vault_password*
+.vault-password*
+vault_pass*
+vault-pass*
+vault_password*
+vault-password*
+*.vault-pass
+*.vault_pass
+
+# ---------------------------------------------------------------------------
+# Real inventory (hostnames, LAN IPs, Tailscale 100.x IPs, MagicDNS names)
+# ---------------------------------------------------------------------------
+inventory/*.yml
+inventory/*.yaml
+inventory/*.ini
+inventory/*.cfg
+inventory/*.json
+!inventory/hosts.example.yml
+# Per-host vars carry real addresses and credentials; keep them local.
+inventory/host_vars/
+host_vars/
+# Local-only group_vars overrides (group_vars/*.yml themselves hold defaults and are tracked)
+inventory/group_vars/*.local.yml
+inventory/group_vars/*.local.yaml
+
+# ---------------------------------------------------------------------------
+# Rendered deploy files and Wazuh secrets
+# (these normally live on the server in /opt/wazuh/deploy, never in the repo;
+#  templates end in .j2 and are not matched by these patterns)
+# ---------------------------------------------------------------------------
+authd.pass
+*.pass
+.env
+.env.*
+*.env
+!*.env.j2
+!*.env.example
+mcp.env
+docker-compose.override.yml
+docker-compose.mcp.yml
+internal_users.yml
+/wazuh.yml
+ossec.conf
+# Local render / validation output (e.g. `docker compose ... config` checks)
+/rendered/
+/render/
+/build/
+/out/
+/tmp/
+# A local clone of upstream wazuh-docker, if one is made for validation
+/wazuh-docker/
+
+# ---------------------------------------------------------------------------
+# Certificates and keys (indexer/dashboard/manager certs, SSH, WinRM)
+# ---------------------------------------------------------------------------
+wazuh_indexer_ssl_certs/
+**/config/wazuh_indexer_ssl_certs/
+certs/
+*.pem
+*.key
+*.crt
+*.cer
+*.der
+*.csr
+*.srl
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.truststore
+*.ppk
+id_rsa*
+id_ecdsa*
+id_ed25519*
+id_dsa*
+known_hosts
+authorized_keys
+
+# ---------------------------------------------------------------------------
+# Tokens and API keys (MCP bearer tokens, Tailscale auth keys)
+# ---------------------------------------------------------------------------
+*.token
+*.tokens
+.token*
+*token*.txt
+*.secret
+*.secrets
+secrets/
+.secrets/
+tskey*
+*authkey*
+# A real tailnet policy (only the snippet template in tailscale/ is tracked)
+tailscale/*.local.hujson
+tailscale/policy.hujson
+tailscale/*.json
+
+# ---------------------------------------------------------------------------
+# Captured logs (scripts/mcp-log-samples.sh output, ansible logs)
+# Real captures contain hostnames, IPs and principals. The synthetic samples in
+# roles/wazuh_mcp/files/samples/ are tracked on purpose.
+# ---------------------------------------------------------------------------
+*.log
+!roles/wazuh_mcp/files/samples/*.log
+captured*.log
+logtest*.txt
+api-logtest*.txt
+ansible.log
+
+# ---------------------------------------------------------------------------
+# Ansible runtime artifacts
+# ---------------------------------------------------------------------------
+*.retry
+.ansible/
+.ansible_cache/
+fact_cache/
+.cache/
+collections/ansible_collections/
+/collections/
+# Molecule / test scratch
+.molecule/
+molecule/*/.cache/
+
+# ---------------------------------------------------------------------------
+# Backups and editor leftovers (a vault.yml.bak or ~ copy is plaintext-risky)
+# ---------------------------------------------------------------------------
+*.bak
+*.backup
+*.orig
+*.rej
+*.old
+*.tmp
+*.swp
+*.swo
+*~
+\#*\#
+.#*
+
+# ---------------------------------------------------------------------------
+# Jupyter: checkpoints are silent copies of whatever was open, vault files included
+# ---------------------------------------------------------------------------
+.ipynb_checkpoints/
+*.ipynb
+
+# ---------------------------------------------------------------------------
+# Python (roles/wazuh_mcp/files/ensure_api_user.py, local tooling)
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---------------------------------------------------------------------------
+# Editors, OS, local AI-tool settings
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+*.code-workspace
+.DS_Store
+Thumbs.db
+desktop.ini
+.claude/settings.local.json
+.claude/*.local.*

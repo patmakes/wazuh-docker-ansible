@@ -1,0 +1,8 @@
+---
+profile: production
+exclude_paths:
+  - .git/
+skip_list:
+  # Variable names (wazuh_version, wazuh_bind_ts_ip, wazuh_indexer_heap, ...) are fixed by
+  # IMPLEMENTATION_PLAN.md and shared across roles, so they cannot carry a per-role prefix.
+  - var-naming[no-role-prefix]
