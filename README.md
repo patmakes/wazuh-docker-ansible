@@ -340,7 +340,7 @@ to check them against real lines.
 
 1. Read Wazuh's [Docker upgrade guide](https://documentation.wazuh.com/current/deployment-options/docker/upgrading-wazuh-docker.html)
    and the release notes for the target version. Stay on 4.14.x; 5.0 is a separate migration.
-2. Take a Proxmox snapshot.
+2. Take a snapshot or backup.
 3. Change `wazuh_version` in `inventory/group_vars/all.yml`.
 4. Compare upstream's `single-node/config/` at the new tag with the three templates copied from it
    (`internal_users.yml.j2`, `wazuh.yml.j2`, `wazuh_manager.conf.j2`) and carry over any changes.
@@ -350,11 +350,6 @@ to check them against real lines.
 
 ## Backups and upgrades
 
-There is no backup tooling in this repo. Backups are Proxmox vzdump jobs to the Unraid share,
-configured in Proxmox (snapshot mode, zstd, about 7 daily and 4 weekly). They cover the Docker
-volumes, `/opt/wazuh/deploy` and the certificates.
-
-- Before bumping `wazuh_version`: snapshot, run the playbook, roll back if it fails.
 - Restoring also needs the vault password. Keep it somewhere outside the VM.
 
 ## SSH hardening on the server
